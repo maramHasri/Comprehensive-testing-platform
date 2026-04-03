@@ -1,19 +1,14 @@
 
 import json
 import os
+import re
 from dotenv import load_dotenv
 from pathlib import Path
 from huggingface_hub import InferenceClient
 
-# ==============================
-# تحميل .env من جذر المشروع
-# ==============================
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=True)
 
-# ==============================
-# إنشاء عميل Hugging Face مباشر
-# ==============================
 def _get_hf_client() -> InferenceClient:
     token = (os.getenv("HF_TOKEN") or "").strip()
 
@@ -28,17 +23,15 @@ def _get_hf_client() -> InferenceClient:
         raise RuntimeError("Invalid Hugging Face token.")
 
     return InferenceClient(
-        model=os.getenv("HF_QUIZ_MODEL", "Qwen/Qwen2.5-7B-Instruct"),  # ❌ بدون :together
+        model=os.getenv("HF_QUIZ_MODEL", "Qwen/Qwen2.5-7B-Instruct"), 
         token=token,
     )
 
-# ==============================
-# توليد الأسئلة من نص
-# ==============================
 def generate_questions(
     text: str,
     question_type: str = "multiple-choice",
-    max_questions: int = 10
+    max_questions: int = 10,
+    retry_count: int = 0,
 ) -> dict:
     """
     توليد أسئلة من نص باستخدام موديل Hugging Face مباشرة.
@@ -51,8 +44,16 @@ You are an exam question generator.
 
 TASK:
 - Read the following text.
-- Generate up to {max_questions} questions of type "{question_type}".
-- You MUST return ONLY valid JSON. No explanations, no extra text.
+- Generate exactly {max_questions} questions of type "{question_type}".
+- You MUST return ONLY valid JSON.
+- Do NOT wrap the JSON in markdown code fences (```json ... ```).
+- No explanations, no extra text.
+- The first character of your reply must be '{{' and the last character must be '}}'.
+
+QUALITY CONSTRAINTS (to prevent truncation):
+- Keep each "question" short (<= 12 words).
+- Keep each choice short (<= 4 words).
+- No code blocks, no markdown, no extra symbols outside JSON.
 
 JSON FORMAT EXACTLY:
 {{
@@ -75,7 +76,8 @@ Text:
         # استدعاء الموديل بأسلوب محادثة (conversational)
         response = client.chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=2000,
+            # Increased to reduce truncation; JSON must still fit.
+            max_tokens=3500,
             temperature=0.3,
         )
         raw_text = response.choices[0].message.content or ""
@@ -88,6 +90,22 @@ Text:
             ) from e
         raise
 
+    def _extract_json_candidate(s: str) -> str:
+       
+        candidate = (s or "").strip()
+
+        if "```" in candidate:
+            candidate = re.sub(r"^```[a-zA-Z]*\s*", "", candidate)
+            candidate = re.sub(r"\s*```$", "", candidate)
+
+        # Slice to the first {...} block as a last resort.
+        first_brace = candidate.find("{")
+        last_brace = candidate.rfind("}")
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            candidate = candidate[first_brace:last_brace + 1]
+
+        return candidate.strip()
+
     try:
         data = json.loads(raw_text)
         if isinstance(data, dict) and "questions" in data:
@@ -96,11 +114,33 @@ Text:
             return {"questions": data}
         return {"questions": [], "raw": raw_text}
     except json.JSONDecodeError:
-        return {"questions": [], "error": "Model did not return valid JSON.", "raw": raw_text}
+        try:
+            cleaned = _extract_json_candidate(raw_text)
+            data = json.loads(cleaned)
+            if isinstance(data, dict) and "questions" in data:
+                return data
+            if isinstance(data, list):
+                return {"questions": data}
+            return {"questions": [], "raw": raw_text}
+        except Exception:
+            if retry_count == 0 and max_questions > 3:
+                smaller = max(3, max_questions // 2)
+                try:
+                    return generate_questions(
+                        text=text,
+                        question_type=question_type,
+                        max_questions=smaller,
+                        retry_count=1,
+                    )
+                except Exception:
+                    pass
 
-# ==============================
-# مثال على الاستخدام
-# ==============================
+            return {
+                "questions": [],
+                "error": "Model did not return valid JSON (even after cleanup).",
+                "raw": raw_text,
+            }
+
 if __name__ == "__main__":
     sample_text = "ضغط البيانات هو عملية تقليل حجم الملف عن طريق إزالة المعلومات المتكررة."
     questions = generate_questions(sample_text, max_questions=3, question_type="multiple-choice")

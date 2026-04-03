@@ -7,8 +7,12 @@ class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
 #اذا كان السؤال ينتمي لبنك اسئلة معين او نريد ادراجه ضمن كويز ايضا 
+    # Deprecated in favor of bank_version_id for versioned banks.
     bank_id = db.Column(db.Integer, db.ForeignKey("question_banks.id"), nullable=True)
+    bank_version_id = db.Column(db.Integer, db.ForeignKey("bank_versions.id"), nullable=True, index=True)
     quiz_id = db.Column(db.Integer, db.ForeignKey("quizzes.id"), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    original_question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=True, index=True)
 
     type = db.Column(db.String(50), nullable=False)  # و نوع السؤال
     content = db.Column(db.Text, nullable=False)    # نص السؤال
@@ -26,6 +30,15 @@ class Question(db.Model):
 
     quiz_questions = db.relationship("QuizQuestion", backref="question", lazy=True)
     choices = db.relationship("Choice", backref="question", cascade="all, delete-orphan")
+    source_question = db.relationship("Question", remote_side=[id], backref="derived_questions", lazy=True)
+    bank_links = db.relationship("BankQuestion", backref="question", lazy=True, cascade="all, delete-orphan")
+    attribution = db.relationship(
+        "QuestionAttribution",
+        backref="question",
+        uselist=False,
+        cascade="all, delete-orphan",
+        foreign_keys="QuestionAttribution.question_id",
+    )
 
 
 #الخيارات الخاصة بسؤال معين
@@ -35,3 +48,21 @@ class Choice(db.Model):
     question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False)
     text = db.Column(db.Text, nullable=False)
     is_correct = db.Column(db.Boolean, default=False)
+
+
+class BankQuestion(db.Model):
+    __tablename__ = "bank_questions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    bank_id = db.Column(db.Integer, db.ForeignKey("question_banks.id"), nullable=False, index=True)
+    question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False, index=True)
+
+
+class QuestionAttribution(db.Model):
+    __tablename__ = "question_attributions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False, unique=True, index=True)
+    original_question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False, index=True)
+    original_bank_id = db.Column(db.Integer, db.ForeignKey("question_banks.id"), nullable=False, index=True)
+    original_owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)

@@ -4,7 +4,7 @@ from flask_jwt_extended.exceptions import JWTDecodeError, NoAuthorizationError, 
 from jwt.exceptions import InvalidSubjectError, ExpiredSignatureError
 from app.extensions import db, migrate, jwt
 from app.config import Config
-from app.api import api
+from app.routes import api
 
 def create_app():
     app = Flask(__name__)
@@ -81,7 +81,7 @@ def create_app():
             description = e.description or str(e)
         return {"message": "An error occurred.", "error": description}, 500
 
-    # Swagger / API (namespaces registered in app.api.__init__)
+    # Swagger / API (namespaces registered in app.routes)
     api.init_app(app)
 
     # Register JWT error handlers with Flask-RESTx API

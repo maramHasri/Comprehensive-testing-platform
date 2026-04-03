@@ -1,52 +1,63 @@
 """
-Shared logic for creating answers (bulk). Used by question API and question_bank API.
+HTTP-facing helpers for question answers (choices).
 """
 from app.extensions import db
-from app.models import Question, Choice
+from app.models import Choice, Question
+from app.services.quiz.question_service import update_question_answers as replace_all_answers
 
 
-def create_bulk_answers(question, answers_payload):
-    """
-    Validate and create bulk answers for a question. Replaces existing choices.
-    Returns (response_dict, status_code) on success, (error_dict, 400) on validation error.
-    question: Question model instance.
-    answers_payload: list of {"text": str, "is_correct": bool}.
-    """
+def get_answers(question_id: int):
+    question = Question.query.get(question_id)
+    if not question:
+        return {"message": "Question not found."}, 404
+    items = [
+        {"id": c.id, "text": c.text, "is_correct": c.is_correct}
+        for c in question.choices
+    ]
+    return items, 200
+
+
+def add_single_answer(question_id: int, text: str, is_correct: bool):
+    question = Question.query.get(question_id)
+    if not question:
+        return {"message": "Question not found."}, 404
+    if not (text or "").strip():
+        return {"message": "Answer text is required."}, 400
     if question.type == "essay":
-        return {"message": "Essay questions must not have answers."}, 400
-
-    if question.type not in ("mcq", "true_false"):
-        return {"message": "Bulk answers are only supported for MCQ and True/False questions."}, 400
-
-    if not answers_payload:
-        return {"message": "At least one answer is required."}, 400
-
-    correct_count = sum(1 for a in answers_payload if a.get("is_correct"))
-    if correct_count == 0:
-        return {"message": "At least one answer must be marked as correct."}, 400
-
-    if correct_count > 1:
-        return {"message": "Only one answer can be marked as correct for this question type."}, 400
-
-    if question.type == "true_false" and len(answers_payload) != 2:
-        return {"message": "True/False question must have exactly two answers."}, 400
-
-    if any(not (a.get("text") or "").strip() for a in answers_payload):
-        return {"message": "Every answer must have non-empty text."}, 400
-
-    Choice.query.filter_by(question_id=question.id).delete()
-    created = []
-    for a in answers_payload:
-        choice = Choice(
-            question_id=question.id,
-            text=(a.get("text") or "").strip(),
-            is_correct=bool(a.get("is_correct", False)),
-        )
-        db.session.add(choice)
-        created.append(choice)
+        return {"message": "Essay questions cannot have answers."}, 400
+    choice = Choice(
+        question_id=question_id,
+        text=text.strip(),
+        is_correct=bool(is_correct),
+    )
+    db.session.add(choice)
     db.session.commit()
-
     return {
-        "question_id": question.id,
-        "answers": [{"id": c.id, "text": c.text, "is_correct": c.is_correct} for c in created],
+        "id": choice.id,
+        "question_id": question_id,
+        "text": choice.text,
+        "is_correct": choice.is_correct,
     }, 201
+
+
+def create_bulk_answers(question_id: int, answers: list[dict]):
+    if not answers:
+        return {"message": "No answers provided."}, 400
+    try:
+        created = replace_all_answers(question_id, answers)
+    except ValueError as e:
+        return {"message": str(e)}, 400
+    return {
+        "answers": [
+            {"id": c.id, "text": c.text, "is_correct": c.is_correct}
+            for c in created
+        ]
+    }, 200
+
+
+def update_question_answers(question_id: int, answers_payload: list[dict]):
+    created = replace_all_answers(question_id, answers_payload)
+    return [
+        {"id": c.id, "text": c.text, "is_correct": c.is_correct}
+        for c in created
+    ]

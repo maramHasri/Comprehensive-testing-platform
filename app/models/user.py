@@ -21,6 +21,7 @@ class User(db.Model):
     quizzes = db.relationship("Quiz", backref="creator", lazy=True)
     question_banks = db.relationship("QuestionBank", backref="owner", lazy=True)
     attempts = db.relationship("QuizAttempt", backref="student", lazy=True)
+    purchases = db.relationship("Purchase", backref="user", lazy=True, cascade="all, delete-orphan")
   # 🔹 تابع لتعيين كلمة مرور مشفرة
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -28,3 +29,28 @@ class User(db.Model):
     # 🔹 تابع للتحقق من كلمة المرور
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    # TODO: Move purchase/upgrade rules to services/bank_service.py.
+    # Model should stay focused on persistence and simple helpers.
+    def has_purchased(self, bank):
+        from app.models.question_bank import Purchase
+
+        return (
+            Purchase.query.filter(
+                Purchase.user_id == self.id,
+                Purchase.bank_id == bank.id,
+            ).first()
+            is not None
+        )
+
+    def has_old_version(self, bank, version):
+        from app.models.question_bank import Purchase
+
+        return (
+            Purchase.query.filter(
+                Purchase.user_id == self.id,
+                Purchase.bank_id == bank.id,
+                Purchase.bank_version_id != version.id,
+            ).first()
+            is not None
+        )

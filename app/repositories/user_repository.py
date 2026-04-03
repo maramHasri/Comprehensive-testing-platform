@@ -1,0 +1,18 @@
+from app.extensions import db
+from app.models import User
+
+
+def get_user_by_email(email: str):
+    return User.query.filter_by(email=email).first()
+
+
+def get_user_by_id(user_id: int):
+    return User.query.get(user_id)
+
+
+def create_user(name: str, email: str, password: str, role: str):
+    user = User(name=name, email=email, role=role)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.flush()
+    return user

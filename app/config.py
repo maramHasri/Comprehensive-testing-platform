@@ -21,6 +21,6 @@ class Config:
     # Rate limiting (forgot-password)
     RATE_LIMIT_FORGOT_PASSWORD = os.getenv("RATE_LIMIT_FORGOT_PASSWORD", "7 per hour")
 
-    # Gmail SMTP (sensitive: set in .env)
-    GMAIL_USER = os.getenv("GMAIL_USER", "meesama89434@gmail.com")
-    GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "jvou ybak evxp frbm")
+    # Gmail SMTP — set GMAIL_USER and GMAIL_APP_PASSWORD in .env (Google App Password)
+    GMAIL_USER = os.getenv("GMAIL_USER")
+    GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")

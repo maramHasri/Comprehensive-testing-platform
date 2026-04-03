@@ -1,0 +1,223 @@
+' graduateProject — Entity Relationship Diagram (all SQLAlchemy models)
+' Paste into https://www.plantuml.com/plantuml/uml or use PlantUML VS Code extension
+' Tables: users, password_reset_tokens, user_sessions, app_messages,
+'         question_banks, bank_versions, purchases, offers,
+'         questions, choices, bank_questions, question_attributions,
+'         quizzes, quiz_questions, quiz_attempts, question_attempts
+
+@startuml erd_graduate_project
+
+hide circle
+skinparam linetype ortho
+
+entity "users" as users {
+  * **id** : INTEGER <<PK>>
+  --
+  * name : VARCHAR(120)
+  * email : VARCHAR(120) <<UK>>
+  * password_hash : VARCHAR(255)
+  * role : VARCHAR(20)
+  created_at : DATETIME
+}
+
+entity "password_reset_tokens" as password_reset_tokens {
+  * **id** : INTEGER <<PK>>
+  --
+  * **user_id** : INTEGER <<FK users.id>>
+  * otp_hash : VARCHAR(255)
+  * expires_at : DATETIME
+  verified_at : DATETIME
+  created_at : DATETIME
+}
+
+entity "user_sessions" as user_sessions {
+  * **id** : INTEGER <<PK>>
+  --
+  * **user_id** : INTEGER <<FK users.id>>
+  * jti : VARCHAR(36) <<UK>>
+  * expires_at : DATETIME
+  created_at : DATETIME
+}
+
+entity "app_messages" as app_messages {
+  * **id** : INTEGER <<PK>>
+  --
+  * message_key : VARCHAR(100)
+  * language : VARCHAR(10)
+  * message_text : TEXT
+  .. uq_app_message_key_lang ..
+}
+
+entity "question_banks" as question_banks {
+  * **id** : INTEGER <<PK>>
+  --
+  * title : VARCHAR(200)
+  * **owner_id** : INTEGER <<FK users.id>>
+  * is_public : BOOLEAN
+  * is_paid : BOOLEAN
+  * base_price : FLOAT
+  * access_type : VARCHAR(20)
+  created_at : DATETIME
+}
+
+entity "bank_versions" as bank_versions {
+  * **id** : INTEGER <<PK>>
+  --
+  * **bank_id** : INTEGER <<FK question_banks.id>>
+  * version_number : INTEGER
+  * price : FLOAT
+  * update_type : VARCHAR(10)
+  * question_count : INTEGER
+  * topic_count : INTEGER
+  created_at : DATETIME
+  * is_major_update : BOOLEAN
+}
+
+entity "purchases" as purchases {
+  * **id** : INTEGER <<PK>>
+  --
+  * **user_id** : INTEGER <<FK users.id>>
+  **bank_id** : INTEGER <<FK question_banks.id>> nullable
+  * **bank_version_id** : INTEGER <<FK bank_versions.id>>
+  * price_paid : FLOAT
+  created_at : DATETIME
+  purchased_at : DATETIME
+}
+
+entity "offers" as offers {
+  * **id** : INTEGER <<PK>>
+  --
+  * name : VARCHAR(120) <<UK>>
+  * discount_percentage : FLOAT
+  * valid_from : DATETIME
+  * valid_to : DATETIME
+  * applies_to_first_purchase : BOOLEAN
+  * applies_to_upgrade : BOOLEAN
+}
+
+entity "questions" as questions {
+  * **id** : INTEGER <<PK>>
+  --
+  **bank_id** : INTEGER <<FK question_banks.id>>
+  **bank_version_id** : INTEGER <<FK bank_versions.id>>
+  **quiz_id** : INTEGER <<FK quizzes.id>>
+  **created_by** : INTEGER <<FK users.id>>
+  **original_question_id** : INTEGER <<FK questions.id>>
+  * type : VARCHAR(50)
+  * content : TEXT
+  hint : TEXT
+  points : FLOAT
+  base_time : INTEGER
+  order_index : INTEGER
+  created_at : DATETIME
+}
+
+entity "choices" as choices {
+  * **id** : INTEGER <<PK>>
+  --
+  * **question_id** : INTEGER <<FK questions.id>>
+  * text : TEXT
+  is_correct : BOOLEAN
+}
+
+entity "bank_questions" as bank_questions {
+  * **id** : INTEGER <<PK>>
+  --
+  * **bank_id** : INTEGER <<FK question_banks.id>>
+  * **question_id** : INTEGER <<FK questions.id>>
+}
+
+entity "question_attributions" as question_attributions {
+  * **id** : INTEGER <<PK>>
+  --
+  * **question_id** : INTEGER <<FK questions.id>> <<UK>>
+  * **original_question_id** : INTEGER <<FK questions.id>>
+  * **original_bank_id** : INTEGER <<FK question_banks.id>>
+  * **original_owner_id** : INTEGER <<FK users.id>>
+}
+
+entity "quizzes" as quizzes {
+  * **id** : INTEGER <<PK>>
+  --
+  * title : VARCHAR(200)
+  description : TEXT
+  * **creator_id** : INTEGER <<FK users.id>>
+  start_at : DATETIME
+  end_at : DATETIME
+  total_time_seconds : INTEGER
+  * total_score : FLOAT
+  equally_weighted : BOOLEAN
+  free_navigation : BOOLEAN
+  timed_scope : VARCHAR(20)
+  * status : VARCHAR(20)
+  * access_code : VARCHAR(36) <<UK>>
+  created_at : DATETIME
+}
+
+entity "quiz_questions" as quiz_questions {
+  * **id** : INTEGER <<PK>>
+  --
+  * **quiz_id** : INTEGER <<FK quizzes.id>>
+  * **question_id** : INTEGER <<FK questions.id>>
+  * order : INTEGER
+}
+
+entity "quiz_attempts" as quiz_attempts {
+  * **id** : INTEGER <<PK>>
+  --
+  * **quiz_id** : INTEGER <<FK quizzes.id>>
+  * **student_id** : INTEGER <<FK users.id>>
+  started_at : DATETIME
+  submitted_at : DATETIME
+  status : VARCHAR(20)
+  * remaining_time : INTEGER
+  score : FLOAT
+}
+
+entity "question_attempts" as question_attempts {
+  * **id** : INTEGER <<PK>>
+  --
+  * **quiz_attempt_id** : INTEGER <<FK quiz_attempts.id>>
+  * **question_id** : INTEGER <<FK questions.id>>
+  selected_answer : TEXT
+  is_correct : BOOLEAN
+  time_spent : INTEGER
+  answered_at : DATETIME
+}
+
+' --- Relationships (from ForeignKey / relationship) ---
+
+users ||--o{ password_reset_tokens : has
+users ||--o{ user_sessions : has
+users ||--o{ question_banks : owns
+users ||--o{ quizzes : creates
+users ||--o{ purchases : makes
+users ||--o{ quiz_attempts : takes
+users ||--o{ questions : creates
+users ||--o{ question_attributions : original_owner
+
+question_banks ||--o{ bank_versions : has
+question_banks ||--o{ questions : contains
+question_banks ||--o{ purchases : for_bank
+question_banks ||--o{ bank_questions : links
+question_banks ||--o{ question_attributions : original_bank
+
+bank_versions ||--o{ purchases : version
+bank_versions ||--o{ questions : versioned
+
+quizzes ||--o{ quiz_questions : orders
+quizzes ||--o{ questions : embeds
+quizzes ||--o{ quiz_attempts : attempts
+
+questions ||--o{ choices : has
+questions ||--o{ quiz_questions : in_quiz
+questions ||--o{ bank_questions : in_bank
+questions ||--o| question_attributions : attribution
+questions ||--o{ questions : derived_from
+questions ||--o{ question_attempts : answered
+
+quiz_attempts ||--o{ question_attempts : includes
+
+' No FK from other tables to offers or app_messages (standalone config / i18n)
+
+@enduml
