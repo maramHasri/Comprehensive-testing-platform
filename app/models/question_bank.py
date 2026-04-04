@@ -8,6 +8,22 @@ ACCESS_PRIVATE = "private"
 ACCESS_TYPES = (ACCESS_PUBLIC, ACCESS_PROTECTED, ACCESS_PRIVATE)
 
 
+class BankTopic(db.Model):
+    """A label within a question bank used to classify questions (unique name per bank)."""
+
+    __tablename__ = "bank_topics"
+    __table_args__ = (db.UniqueConstraint("bank_id", "name", name="uq_bank_topics_bank_name"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    bank_id = db.Column(db.Integer, db.ForeignKey("question_banks.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    questions = db.relationship("Question", back_populates="topic", lazy=True)
+    question_bank = db.relationship("QuestionBank", back_populates="bank_topics")
+
+
 class QuestionBank(db.Model):
     __tablename__ = "question_banks"
 
@@ -27,6 +43,13 @@ class QuestionBank(db.Model):
     versions = db.relationship("BankVersion", backref="bank", lazy=True, cascade="all, delete-orphan")
     purchases = db.relationship("Purchase", backref="bank", lazy=True, cascade="all, delete-orphan")
     bank_questions = db.relationship("BankQuestion", backref="bank", lazy=True, cascade="all, delete-orphan")
+    bank_topics = db.relationship(
+        "BankTopic",
+        back_populates="question_bank",
+        lazy=True,
+        cascade="all, delete-orphan",
+        order_by="BankTopic.sort_order",
+    )
 
 
 class BankVersion(db.Model):

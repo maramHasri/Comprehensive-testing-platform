@@ -1,12 +1,10 @@
 """
-Localization service:
-- Reads request language
-- Applies fallback logic
-- Formats messages
+Localization helpers: request language + delegated message resolution (cached in message_repository).
 """
 
 from flask import request
-from app.repositories.message_repository import get_message_row, get_message_row_fallback
+
+from app.repositories.message_repository import get_message, get_message_format
 
 
 def get_current_lang() -> str:
@@ -24,35 +22,18 @@ def get_current_lang() -> str:
     return lang[:2] if len(lang) >= 2 else "en"
 
 
-def get_localized_message(message_key: str, lang: str = None) -> str:
+def get_localized_message(message_key: str, lang: str | None = None) -> str:
     """
-    Get message with fallback to English.
+    Same resolution as get_message (DB + English fallback + catalog + default).
+    Uses in-memory cache in message_repository.
     """
     if lang is None:
         lang = get_current_lang()
-
-    row = get_message_row(message_key, lang)
-
-    if row:
-        return row.message_text
-
-    # fallback to English
-    if lang != "en":
-        fallback = get_message_row_fallback(message_key)
-        if fallback:
-            return fallback.message_text
-
-    return message_key
+    return get_message(message_key, lang)
 
 
-def get_localized_message_format(message_key: str, lang: str = None, **kwargs) -> str:
-    """
-    Get localized message and format placeholders.
-    Example: "Hello {name}"
-    """
-    text = get_localized_message(message_key, lang)
-
-    try:
-        return text.format(**kwargs)
-    except KeyError:
-        return text
+def get_localized_message_format(message_key: str, lang: str | None = None, **kwargs) -> str:
+    """Localized message with str.format placeholders."""
+    if lang is None:
+        lang = get_current_lang()
+    return get_message_format(message_key, lang, **kwargs)

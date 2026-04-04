@@ -15,10 +15,12 @@ def create_question(
     created_by: int | None = None,
     original_question_id: int | None = None,
     base_time: int | None = None,
+    topic_id: int | None = None,
 ) -> Question:
     latest_version = get_latest_version(bank_id)
     question = Question(
         bank_id=bank_id,
+        topic_id=topic_id,
         bank_version_id=latest_version.id if latest_version else None,
         type=qtype,
         content=text,

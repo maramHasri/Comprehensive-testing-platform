@@ -1,0 +1,1 @@
+"""Admin localization routes namespace."""

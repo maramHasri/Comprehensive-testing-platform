@@ -9,6 +9,12 @@ class Question(db.Model):
 #اذا كان السؤال ينتمي لبنك اسئلة معين او نريد ادراجه ضمن كويز ايضا 
     # Deprecated in favor of bank_version_id for versioned banks.
     bank_id = db.Column(db.Integer, db.ForeignKey("question_banks.id"), nullable=True)
+    topic_id = db.Column(
+        db.Integer,
+        db.ForeignKey("bank_topics.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     bank_version_id = db.Column(db.Integer, db.ForeignKey("bank_versions.id"), nullable=True, index=True)
     quiz_id = db.Column(db.Integer, db.ForeignKey("quizzes.id"), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
@@ -32,6 +38,7 @@ class Question(db.Model):
     choices = db.relationship("Choice", backref="question", cascade="all, delete-orphan")
     source_question = db.relationship("Question", remote_side=[id], backref="derived_questions", lazy=True)
     bank_links = db.relationship("BankQuestion", backref="question", lazy=True, cascade="all, delete-orphan")
+    topic = db.relationship("BankTopic", back_populates="questions")
     attribution = db.relationship(
         "QuestionAttribution",
         backref="question",

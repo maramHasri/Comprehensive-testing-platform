@@ -1,6 +1,7 @@
 from typing import Any, Dict
 
 from app.extensions import db
+from app.models import BankTopic
 from app.routes.question_banks.repository import (
     get_bank_by_id,
     create_question,
@@ -22,6 +23,9 @@ class NotFoundError(Exception):
     pass
 
 
+NOT_GIVEN = object()
+
+
 ALLOWED_QTYPES = {"mcq", "true_false", "essay"}
 QTYPE_ALIASES = {
     "multiple_choice": "mcq",
@@ -29,6 +33,23 @@ QTYPE_ALIASES = {
     "true/false": "true_false",
     "true-false": "true_false",
 }
+
+
+def _extract_topic_id_raw(payload: Dict[str, Any]) -> Any:
+    """
+    Topic id from JSON: topic_id, topicId (camelCase), or topic: { id }.
+    Returns NOT_GIVEN if the client did not specify a topic field.
+    """
+    if "topic_id" in payload:
+        return payload.get("topic_id")
+    if "topicId" in payload:
+        return payload.get("topicId")
+    if "topic" in payload:
+        t = payload.get("topic")
+        if isinstance(t, dict):
+            return t.get("id")
+        return t
+    return NOT_GIVEN
 
 
 def _validate_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -68,11 +89,22 @@ def _validate_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             if not (ans.get("text") or "").strip():
                 raise ValidationError(f"Answer at index {idx} is missing 'text'.")
 
-    return {
+    out = {
         "text": text,
         "question_type": qtype,
         "answers": answers,
     }
+    raw_topic = _extract_topic_id_raw(payload)
+    if raw_topic is not NOT_GIVEN:
+        out["topic_id"] = raw_topic
+    return out
+
+
+def _topic_brief(question) -> Dict[str, Any] | None:
+    t = question.topic
+    if not t:
+        return None
+    return {"id": t.id, "name": t.name}
 
 
 def _question_to_dict(question) -> Dict[str, Any]:
@@ -81,15 +113,34 @@ def _question_to_dict(question) -> Dict[str, Any]:
         "bank_id": question.bank_id,
         "type": question.type,
         "content": question.content,
+        "hint": question.hint,
         "created_by": question.created_by,
         "original_question_id": question.original_question_id,
         "points": question.points,
         "base_time": question.base_time,
+        "topic_id": question.topic_id,
+        "topic": _topic_brief(question),
         "answers": [
             {"id": c.id, "text": c.text, "is_correct": c.is_correct}
             for c in question.choices
         ],
     }
+
+
+def resolve_topic_id_for_bank(bank_id: int, raw) -> int | None:
+    """Return topic id for this bank, or None to clear / omit. Raises ValidationError."""
+    if raw is None or raw == "":
+        return None
+    try:
+        tid = int(raw)
+    except (TypeError, ValueError):
+        raise ValidationError("Field 'topic_id' must be an integer or null.")
+    if tid <= 0:
+        return None
+    t = BankTopic.query.filter_by(id=tid, bank_id=bank_id).first()
+    if not t:
+        raise ValidationError("Topic not found in this question bank.")
+    return tid
 
 
 def create_question_with_answers(
@@ -114,6 +165,9 @@ def create_question_with_answers(
     points = float(payload.get("points") or payload.get("score") or 1.0)
     base_time = payload.get("time_limit_seconds")
     original_question_id = payload.get("original_question_id")
+    topic_id = None
+    if "topic_id" in data:
+        topic_id = resolve_topic_id_for_bank(bank.id, data["topic_id"])
 
     try:
         latest_version = get_latest_version(bank.id)
@@ -131,10 +185,12 @@ def create_question_with_answers(
             created_by=owner_id,
             original_question_id=original_question_id,
             base_time=base_time,
+            topic_id=topic_id,
         )
         if answers:
             replace_question_answers(question, answers)
         db.session.commit()
+        db.session.refresh(question)
     except Exception:
         db.session.rollback()
         raise

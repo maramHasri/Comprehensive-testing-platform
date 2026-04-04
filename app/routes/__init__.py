@@ -13,6 +13,8 @@ from app.routes.answers.routes import answer_ns
 from app.routes.attempts.routes import attempt_ns
 from app.routes.files.routes import files_ns
 from app.routes.processing.routes import processing_ns
+from app.routes.ai_generation.routes import ai_generation_ns
+from app.routes.admin_i18n.routes import admin_i18n_ns
 
 authorizations = {
     "Bearer": {
@@ -38,5 +40,7 @@ api.add_namespace(quiz_ns, path="/api/quizzes")
 api.add_namespace(question_ns, path="/api/questions")
 api.add_namespace(answer_ns, path="/api/questions")  # routes are /<question_id>/answers, so full path /api/questions/<id>/answers
 api.add_namespace(attempt_ns, path="/api/quizzes")   # routes are /<quiz_id>/attempts, so full path /api/quizzes/<id>/attempts
-api.add_namespace(files_ns, path="/api/files")       # /api/files/extract_text
-api.add_namespace(processing_ns, path="/api")        # /api/extract-text, /api/generate-quiz
+api.add_namespace(files_ns, path="/api/files")       # /api/files/extract_text (same extraction as /api/extract-text)
+api.add_namespace(processing_ns, path="/api")        # /api/extract-text — file → plain text only
+api.add_namespace(ai_generation_ns, path="/api/ai")    # /api/ai/generate-quiz — JSON questions from content_text (Qwen)
+api.add_namespace(admin_i18n_ns, path="/api/admin")  # /api/admin/messages (admin JWT)

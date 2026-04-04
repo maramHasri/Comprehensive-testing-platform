@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.models import BankVersion
+from app.models import BankTopic, BankVersion
 
 
 def get_latest_version(bank_id: int):
@@ -32,3 +32,13 @@ def get_versions_by_bank(bank_id: int):
         .order_by(BankVersion.version_number.asc(), BankVersion.id.asc())
         .all()
     )
+
+
+def sync_topic_counts_for_bank(bank_id: int) -> int:
+    """Set topic_count on all versions of this bank to the number of BankTopic rows."""
+    count = BankTopic.query.filter_by(bank_id=bank_id).count()
+    BankVersion.query.filter_by(bank_id=bank_id).update(
+        {BankVersion.topic_count: count},
+        synchronize_session=False,
+    )
+    return count
