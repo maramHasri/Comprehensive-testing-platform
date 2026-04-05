@@ -1,4 +1,5 @@
 import logging
+import os
 import smtplib
 import ssl
 import sys
@@ -26,6 +27,16 @@ def send_otp_email(to_email: str, otp: str, app_name: str = "quiz management sys
     """
     server: smtplib.SMTP | None = None
     try:
+        # Raw env (before Flask config) — helps verify .env / Render vars are visible to the process.
+        print("DEBUG EMAIL:", os.getenv("GMAIL_USER"), flush=True)
+        # Never print the full app password in logs (secrets leak). Length + presence only.
+        _dp_env = os.getenv("GMAIL_APP_PASSWORD")
+        print(
+            "DEBUG PASS:",
+            f"set len={len(_dp_env)}" if _dp_env else "missing",
+            flush=True,
+        )
+
         from flask import current_app
 
         gmail_user = (current_app.config.get("GMAIL_USER") or "").strip()
