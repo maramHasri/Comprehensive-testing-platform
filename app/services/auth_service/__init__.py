@@ -84,7 +84,7 @@ def forgot_password(email: str, lang: str | None = None) -> tuple[dict, int]:
     if not user:
         # Same JSON as success to avoid email enumeration; log server-side for operators.
         _auth_log.info(
-            "[forgot-password] No user matched (wrong email, different casing before fix, or not registered on this DB)."
+            "[forgot-password] No user matched this email — not registered on this database or typo in address."
         )
         return {"message": msg}, 200
     otp = otp_svc.create_reset_token_for_user(

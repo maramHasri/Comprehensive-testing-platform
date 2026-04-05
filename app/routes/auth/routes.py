@@ -4,6 +4,7 @@ No business logic, no DB queries. All user-facing messages come from service (DB
 """
 # TODO: Keep only Blueprint/route registration here after modular refactor.
 # TODO: Ensure all input validation rules remain in services/auth_service.py.
+from flask import request
 from flask_restx import Namespace, Resource, fields, reqparse
 from flask_jwt_extended import jwt_required, get_jwt
 
@@ -76,6 +77,65 @@ reset_parser.add_argument(
 token_model = auth_ns.model("Token", {"token": fields.String})
 
 
+def _str_or_none(value):
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s if s else None
+
+
+def _email_from_forgot_request() -> str | None:
+    """
+    Resolve email for forgot-password. Query string wins over JSON/form/reqparse so
+    Swagger/curl like POST ...?email=...& -d '' still works (reqparse can drop ?email=).
+    """
+    parsed = forgot_parser.parse_args()
+    body = request.get_json(silent=True) or {}
+    raw = (
+        request.args.get("email")
+        or body.get("email")
+        or request.form.get("email")
+        or parsed.get("email")
+    )
+    return _str_or_none(raw)
+
+
+def _verify_otp_params_from_request() -> tuple[str | None, str | None]:
+    parsed = verify_otp_parser.parse_args()
+    body = request.get_json(silent=True) or {}
+    email_raw = (
+        request.args.get("email")
+        or body.get("email")
+        or request.form.get("email")
+        or parsed.get("email")
+    )
+    otp_raw = (
+        request.args.get("otp")
+        or body.get("otp")
+        or request.form.get("otp")
+        or parsed.get("otp")
+    )
+    return _str_or_none(email_raw), _str_or_none(otp_raw)
+
+
+def _reset_password_params_from_request() -> tuple[str | None, str | None]:
+    parsed = reset_parser.parse_args()
+    body = request.get_json(silent=True) or {}
+    email_raw = (
+        request.args.get("email")
+        or body.get("email")
+        or request.form.get("email")
+        or parsed.get("email")
+    )
+    pw_raw = (
+        request.args.get("new_password")
+        or body.get("new_password")
+        or request.form.get("new_password")
+        or parsed.get("new_password")
+    )
+    return _str_or_none(email_raw), _str_or_none(pw_raw)
+
+
 @auth_ns.route("/register")
 class Register(Resource):
     @auth_ns.expect(register_parser)
@@ -127,8 +187,8 @@ class ForgotPassword(Resource):
     @auth_ns.response(429, "Too many requests")
     @auth_ns.response(503, "Email not sent (SMTP not configured or send failed)")
     def post(self):
-        args = forgot_parser.parse_args()
-        result, status = forgot_password_svc(email=args.get("email"), lang=get_current_lang())
+        email = _email_from_forgot_request()
+        result, status = forgot_password_svc(email=email, lang=get_current_lang())
         return result, status
 
 
@@ -138,10 +198,10 @@ class VerifyOtp(Resource):
     @auth_ns.response(200, "Code verified")
     @auth_ns.response(400, "Invalid or expired code")
     def post(self):
-        args = verify_otp_parser.parse_args()
+        email, otp = _verify_otp_params_from_request()
         result, status = verify_otp_svc(
-            email=args.get("email"),
-            otp=args.get("otp"),
+            email=email,
+            otp=otp,
             lang=get_current_lang(),
         )
         return result, status
@@ -153,10 +213,10 @@ class ResetPassword(Resource):
     @auth_ns.response(200, "Password reset successfully")
     @auth_ns.response(400, "Validation error or expired session")
     def post(self):
-        args = reset_parser.parse_args()
+        email, new_password = _reset_password_params_from_request()
         result, status = reset_password_svc(
-            email=args.get("email"),
-            new_password=args.get("new_password"),
+            email=email,
+            new_password=new_password,
             lang=get_current_lang(),
         )
         return result, status
