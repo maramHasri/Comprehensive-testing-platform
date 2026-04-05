@@ -28,8 +28,11 @@ def send_otp_email(to_email: str, otp: str, app_name: str = "quiz management sys
     try:
         from flask import current_app
 
-        gmail_user = current_app.config.get("GMAIL_USER")
+        gmail_user = (current_app.config.get("GMAIL_USER") or "").strip()
         gmail_password = current_app.config.get("GMAIL_APP_PASSWORD")
+        if isinstance(gmail_password, str):
+            # Google shows app passwords as "xxxx xxxx xxxx xxxx"; SMTP needs them without spaces.
+            gmail_password = "".join(gmail_password.split())
 
         _email_trace(
             f"GMAIL_USER: {'set' if gmail_user else 'None'} "

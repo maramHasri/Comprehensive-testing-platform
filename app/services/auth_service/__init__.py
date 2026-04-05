@@ -2,6 +2,7 @@
 Auth business logic: register, login, logout, password reset.
 Uses localized messages from message repository; lang from request or argument.
 """
+import logging
 import uuid
 from datetime import datetime, timedelta
 
@@ -17,6 +18,8 @@ from app.services.email_template_service import send_otp_email
 from app.utils.localization import get_current_lang
 from app.utils.password_validation import validate_password
 from app.utils.rate_limit import is_rate_limited
+
+_auth_log = logging.getLogger(__name__)
 
 
 def register(name: str, email: str, password: str, role: str, lang: str | None = None) -> tuple[dict, int]:
@@ -79,16 +82,26 @@ def forgot_password(email: str, lang: str | None = None) -> tuple[dict, int]:
     user = get_user_by_email(email.strip())
     msg = get_message("AUTH_FORGOT_PASSWORD_GENERIC", lang)
     if not user:
+        # Same JSON as success to avoid email enumeration; log server-side for operators.
+        _auth_log.info(
+            "[forgot-password] No user matched (wrong email, different casing before fix, or not registered on this DB)."
+        )
         return {"message": msg}, 200
     otp = otp_svc.create_reset_token_for_user(
         user, current_app.config["OTP_EXPIRY_MINUTES"], commit=False
     )
+    _auth_log.info("[forgot-password] User id=%s matched; sending OTP email.", user.id)
     if not send_otp_email(user.email, otp):
         db.session.rollback()
+        _auth_log.warning(
+            "[forgot-password] SMTP send failed for user id=%s (see [EMAIL] logs).",
+            user.id,
+        )
         return {
             "message": get_message("AUTH_EMAIL_SEND_FAILED", lang),
         }, 503
     db.session.commit()
+    _auth_log.info("[forgot-password] OTP email accepted by SMTP for user id=%s.", user.id)
     return {"message": msg}, 200
 
 

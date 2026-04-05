@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from sqlalchemy import func
 from app.extensions import db
 from app.models import User, PasswordResetToken
+from app.repositories.user_repository import get_user_by_email
 
 
 def _generate_otp() -> str:
@@ -47,12 +47,6 @@ def create_reset_token_for_user(user: User, expiry_minutes: int, commit: bool = 
     else:
         db.session.flush()
     return otp
-
-
-def get_user_by_email(email: str) -> User | None:
-    if not email or not email.strip():
-        return None
-    return User.query.filter(func.lower(User.email) == email.strip().lower()).first()
 
 
 def get_valid_token_for_verify(user_id: int) -> PasswordResetToken | None:
