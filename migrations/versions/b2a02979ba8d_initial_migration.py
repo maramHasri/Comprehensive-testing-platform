@@ -1,7 +1,7 @@
 """initial migration
 
 Revision ID: b2a02979ba8d
-Revises: 
+Revises:
 Create Date: 2026-02-28 23:58:38.775605
 
 """
@@ -10,29 +10,31 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'b2a02979ba8d'
+revision = "b2a02979ba8d"
 down_revision = None
 branch_labels = None
 depends_on = None
 
+
 def upgrade():
     op.create_table(
-        'app_messages',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('message_key', sa.String(length=100), nullable=False),
-        sa.Column('language', sa.String(length=10), nullable=False),
-        sa.Column('message_text', sa.Text(), nullable=False),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('message_key', 'language', name='uq_app_message_key_lang')
+        "app_messages",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("message_key", sa.String(length=100), nullable=False),
+        sa.Column("language", sa.String(length=10), nullable=False),
+        sa.Column("message_text", sa.Text(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("message_key", "language", name="uq_app_message_key_lang"),
     )
 
-    with op.batch_alter_table('app_messages', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_app_messages_language'), ['language'], unique=False)
-        batch_op.create_index(batch_op.f('ix_app_messages_message_key'), ['message_key'], unique=False)
+    with op.batch_alter_table("app_messages", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_app_messages_language"), ["language"], unique=False)
+        batch_op.create_index(batch_op.f("ix_app_messages_message_key"), ["message_key"], unique=False)
 
-   def downgrade():
-    with op.batch_alter_table('app_messages', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_app_messages_message_key'))
-        batch_op.drop_index(batch_op.f('ix_app_messages_language'))
 
-    op.drop_table('app_messages')
+def downgrade():
+    with op.batch_alter_table("app_messages", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_app_messages_message_key"))
+        batch_op.drop_index(batch_op.f("ix_app_messages_language"))
+
+    op.drop_table("app_messages")
