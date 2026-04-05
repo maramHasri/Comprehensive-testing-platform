@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
+SMTP_PORT = 465
 SMTP_TIMEOUT_SECONDS = 10
 
 
