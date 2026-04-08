@@ -24,6 +24,34 @@ class BankTopic(db.Model):
     question_bank = db.relationship("QuestionBank", back_populates="bank_topics")
 
 
+class BankLevel(db.Model):
+    __tablename__ = "bank_levels"
+    __table_args__ = (db.UniqueConstraint("bank_id", "name", name="uq_bank_levels_bank_name"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    bank_id = db.Column(db.Integer, db.ForeignKey("question_banks.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    questions = db.relationship("Question", back_populates="level", lazy=True)
+    question_bank = db.relationship("QuestionBank", back_populates="bank_levels")
+
+
+class BankRepeatedLevel(db.Model):
+    __tablename__ = "bank_repeated_levels"
+    __table_args__ = (db.UniqueConstraint("bank_id", "name", name="uq_bank_repeated_levels_bank_name"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    bank_id = db.Column(db.Integer, db.ForeignKey("question_banks.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    questions = db.relationship("Question", back_populates="repeated_level", lazy=True)
+    question_bank = db.relationship("QuestionBank", back_populates="bank_repeated_levels")
+
+
 class QuestionBank(db.Model):
     __tablename__ = "question_banks"
 
@@ -49,6 +77,20 @@ class QuestionBank(db.Model):
         lazy=True,
         cascade="all, delete-orphan",
         order_by="BankTopic.sort_order",
+    )
+    bank_levels = db.relationship(
+        "BankLevel",
+        back_populates="question_bank",
+        lazy=True,
+        cascade="all, delete-orphan",
+        order_by="BankLevel.sort_order",
+    )
+    bank_repeated_levels = db.relationship(
+        "BankRepeatedLevel",
+        back_populates="question_bank",
+        lazy=True,
+        cascade="all, delete-orphan",
+        order_by="BankRepeatedLevel.sort_order",
     )
 
 

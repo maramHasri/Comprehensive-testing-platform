@@ -12,7 +12,7 @@ from flask import request
 from sqlalchemy import func, or_
 
 from app.extensions import db
-from app.models import QuestionBank, Question, Choice, User, Purchase, BankVersion, BankTopic
+from app.models import QuestionBank, Question, Choice, User, Purchase, BankVersion, BankTopic, BankLevel, BankRepeatedLevel
 from app.models.question_bank import ACCESS_PUBLIC, ACCESS_PROTECTED, ACCESS_PRIVATE, ACCESS_TYPES
 from app.utils.request_validation import (
     trim_str,
@@ -26,6 +26,8 @@ from app.routes.question_banks.service import (
     PermissionError,
     NotFoundError,
     resolve_topic_id_for_bank,
+    resolve_level_id_for_bank,
+    resolve_repeated_level_id_for_bank,
     _question_to_dict,
 )
 from app.repositories.bank_version_repository import get_versions_by_bank, sync_topic_counts_for_bank
@@ -42,7 +44,10 @@ from app.services.question_bank.bank_version_service import (
 
 question_bank_ns = Namespace(
     " Question Banks",
-    description="Create and manage question banks. Use form fields below (no raw JSON).",
+    description=(
+        "Create and manage question banks. Questions can be tagged with topic, level, "
+        "and repeated_level (each defined per bank under /topics, /levels, /repeated-levels)."
+    ),
 )
 
 
@@ -84,6 +89,8 @@ def _ensure_can_edit_bank(bank_id):
 
 def _serialize_question_for_bank(q, include_bank_version_id=False):
     t = q.topic
+    lv = q.level
+    rl = q.repeated_level
     row = {
         "id": q.id,
         "type": q.type,
@@ -95,6 +102,10 @@ def _serialize_question_for_bank(q, include_bank_version_id=False):
         "base_time": q.base_time,
         "topic_id": q.topic_id,
         "topic": {"id": t.id, "name": t.name} if t else None,
+        "level_id": q.level_id,
+        "level": {"id": lv.id, "name": lv.name} if lv else None,
+        "repeated_level_id": q.repeated_level_id,
+        "repeated_level": {"id": rl.id, "name": rl.name} if rl else None,
         "answers": [{"id": c.id, "text": c.text, "is_correct": c.is_correct} for c in q.choices],
     }
     if include_bank_version_id:
@@ -102,14 +113,73 @@ def _serialize_question_for_bank(q, include_bank_version_id=False):
     return row
 
 
-# ----- Form parsers (form-style in Swagger) -----
+# ----- Create/update parsers: query string, JSON, or form (Swagger) -----
 bank_create_parser = reqparse.RequestParser()
-bank_create_parser.add_argument("title", type=str, required=True, location="form", help="Bank title (required)")
-bank_create_parser.add_argument("access_type", type=str, default="private", location="form", choices=("public", "protected", "private"), help="public | protected | private")
+bank_create_parser.add_argument(
+    "title",
+    type=str,
+    required=False,
+    location=("args", "json", "form"),
+    help="Bank title (required in handler)",
+)
+bank_create_parser.add_argument(
+    "access_type",
+    type=str,
+    default="private",
+    location=("args", "json", "form"),
+    choices=("public", "protected", "private"),
+    help="public | protected | private",
+)
 
 bank_update_parser = reqparse.RequestParser()
-bank_update_parser.add_argument("title", type=str, location="form", help="New title")
-bank_update_parser.add_argument("access_type", type=str, location="form", choices=("public", "protected", "private"), help="public | protected | private")
+bank_update_parser.add_argument("title", type=str, location=("args", "json", "form"), help="New title")
+bank_update_parser.add_argument(
+    "access_type",
+    type=str,
+    location=("args", "json", "form"),
+    choices=("public", "protected", "private"),
+    help="public | protected | private",
+)
+
+
+def _bank_create_params_from_request():
+    """
+    Prefer query string (?title=&access_type=), then JSON, then form, then reqparse.
+    Fixes clients that send only URL params with an empty body.
+    """
+    parsed = bank_create_parser.parse_args()
+    body = request.get_json(silent=True) or {}
+    title = (
+        request.args.get("title")
+        or body.get("title")
+        or request.form.get("title")
+        or parsed.get("title")
+    )
+    access_type = (
+        request.args.get("access_type")
+        or body.get("access_type")
+        or request.form.get("access_type")
+        or parsed.get("access_type")
+    )
+    return title, access_type
+
+
+def _bank_update_params_from_request():
+    parsed = bank_update_parser.parse_args()
+    body = request.get_json(silent=True) or {}
+    title = (
+        request.args.get("title")
+        or body.get("title")
+        or request.form.get("title")
+        or parsed.get("title")
+    )
+    access_type = (
+        request.args.get("access_type")
+        or body.get("access_type")
+        or request.form.get("access_type")
+        or parsed.get("access_type")
+    )
+    return title, access_type
 
 
 def _merge_version_create_inputs():
@@ -224,6 +294,57 @@ def _topic_counts_by_id_for_bank(bank_id: int) -> dict:
     return {tid: c for tid, c in rows}
 
 
+def _truthy_query_param(value) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _bank_ids_from_user_purchases(user_id: int) -> set:
+    """Distinct question bank IDs the user has purchased (via bank_id or bank_version)."""
+    ids = set()
+    for p in Purchase.query.filter_by(user_id=user_id).all():
+        bid = p.bank_id
+        if bid is None:
+            bv = BankVersion.query.get(p.bank_version_id)
+            if bv is not None:
+                bid = bv.bank_id
+        if bid is not None:
+            ids.add(bid)
+    return ids
+
+
+def _list_related_banks_for_user(current_user_id: int) -> list:
+    """Banks the user owns or has purchased; includes is_owner and is_purchased."""
+    purchased_bank_ids = _bank_ids_from_user_purchases(current_user_id)
+    owned_ids = {b.id for b in QuestionBank.query.filter_by(owner_id=current_user_id).all()}
+    all_ids = owned_ids | purchased_bank_ids
+    if not all_ids:
+        return []
+    banks = (
+        QuestionBank.query.filter(QuestionBank.id.in_(all_ids))
+        .order_by(QuestionBank.created_at.desc())
+        .all()
+    )
+    out = []
+    for b in banks:
+        owner = User.query.get(b.owner_id) if b.owner_id else None
+        out.append(
+            {
+                "id": b.id,
+                "title": b.title,
+                "access_type": b.access_type,
+                "owner_id": b.owner_id,
+                "owner_name": owner.name if owner else None,
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+                "questions_count": len(b.questions),
+                "is_owner": b.owner_id == current_user_id,
+                "is_purchased": b.id in purchased_bank_ids,
+            }
+        )
+    return out
+
+
 # ----- Response / request models -----
 answer_response_model = question_bank_ns.model(
     "AnswerInBank",
@@ -249,15 +370,19 @@ question_create_model = question_bank_ns.model(
         ),
         "topic_id": fields.Integer(
             required=False,
-            description="Optional BankTopic.id in this bank. Same as topicId or topic.id",
+            description=(
+                "Optional: existing BankTopic.id in this bank. Omit or null to leave untagged. "
+                "For compatibility, JSON may also use topicId (camelCase) or topic: { id: number }; "
+                "server accepts those but prefer topic_id only."
+            ),
         ),
-        "topicId": fields.Integer(
+        "level_id": fields.Integer(
             required=False,
-            description="camelCase alias for topic_id (mobile/JS clients)",
+            description="Optional: BankLevel.id in this bank.",
         ),
-        "topic": fields.Raw(
+        "repeated_level_id": fields.Integer(
             required=False,
-            description='Optional {"id": <topic primary key>} to assign this question to a topic',
+            description="Optional: BankRepeatedLevel.id in this bank.",
         ),
         "answers": fields.List(
             fields.Nested(answer_create_model),
@@ -337,6 +462,10 @@ question_in_bank_model = question_bank_ns.model(
         "base_time": fields.Raw,
         "topic_id": fields.Integer,
         "topic": fields.Nested(topic_brief_model, allow_null=True),
+        "level_id": fields.Integer,
+        "level": fields.Raw,
+        "repeated_level_id": fields.Integer,
+        "repeated_level": fields.Raw,
         "answers": fields.List(fields.Nested(answer_response_model)),
     },
 )
@@ -361,15 +490,15 @@ class QuestionBankList(Resource):
     @question_bank_ns.response(401, "Not authenticated")
     @jwt_required()
     def post(self):
-        """Create a new question bank. Fill in form fields; owner is the authenticated user."""
-        args = bank_create_parser.parse_args()
+        """Create a new question bank. Use query ?title=&access_type=, JSON, or form fields."""
+        title_raw, access_raw = _bank_create_params_from_request()
         current_user_id = _current_user_id()
         if current_user_id is None:
             return {"message": "Authentication required."}, 401
-        title, err = validate_required_str(args.get("title"), "Title", min_len=1)
+        title, err = validate_required_str(title_raw, "Title", min_len=1)
         if err:
             return {"message": err}, 400
-        access_type = (trim_str(args.get("access_type")) or ACCESS_PRIVATE).lower()
+        access_type = (trim_str(access_raw) or ACCESS_PRIVATE).lower()
         if access_type not in ACCESS_TYPES:
             access_type = ACCESS_PRIVATE
         bank = QuestionBank(
@@ -397,11 +526,21 @@ class QuestionBankList(Resource):
             "questions_count": 0,
         }, 201
 
-    @question_bank_ns.doc(params={"owner_id": "Filter by owner user ID (after visibility)"})
+    @question_bank_ns.doc(
+        params={
+            "owner_id": "Filter by owner user ID (after visibility)",
+            "related": "1 or true: banks you own or purchased (JWT required). Replaces legacy GET /me.",
+        }
+    )
     @question_bank_ns.response(200, "List of banks visible to current user")
     @jwt_required(optional=True)
     def get(self):
-        """List question banks. Public/protected visible to all; private only to owner. Auth optional."""
+        """List question banks, or with related=1 your owned/purchased banks (same data as former /me)."""
+        if _truthy_query_param(request.args.get("related")):
+            current_user_id = _current_user_id()
+            if current_user_id is None:
+                return {"message": "Authentication required."}, 401
+            return _list_related_banks_for_user(current_user_id), 200
         current_user_id = _current_user_id()
         owner_id_filter = request.args.get("owner_id", type=int)
         query = QuestionBank.query
@@ -431,58 +570,6 @@ class QuestionBankList(Resource):
                 "created_at": b.created_at.isoformat() if b.created_at else None,
                 "questions_count": len(b.questions),
             })
-        return out, 200
-
-
-def _bank_ids_from_user_purchases(user_id: int) -> set:
-    """Distinct question bank IDs the user has purchased (via bank_id or bank_version)."""
-    ids = set()
-    for p in Purchase.query.filter_by(user_id=user_id).all():
-        bid = p.bank_id
-        if bid is None:
-            bv = BankVersion.query.get(p.bank_version_id)
-            if bv is not None:
-                bid = bv.bank_id
-        if bid is not None:
-            ids.add(bid)
-    return ids
-
-
-@question_bank_ns.route("/me")
-class QuestionBanksRelatedToCurrentUser(Resource):
-    @jwt_required()
-    @question_bank_ns.response(200, "Question banks owned by or purchased by the current user")
-    def get(self):
-        """List all question banks related to the current user (owned and/or purchased)."""
-        current_user_id = _current_user_id()
-        if current_user_id is None:
-            return {"message": "Authentication required."}, 401
-        purchased_bank_ids = _bank_ids_from_user_purchases(current_user_id)
-        owned_ids = {b.id for b in QuestionBank.query.filter_by(owner_id=current_user_id).all()}
-        all_ids = owned_ids | purchased_bank_ids
-        if not all_ids:
-            return [], 200
-        banks = (
-            QuestionBank.query.filter(QuestionBank.id.in_(all_ids))
-            .order_by(QuestionBank.created_at.desc())
-            .all()
-        )
-        out = []
-        for b in banks:
-            owner = User.query.get(b.owner_id) if b.owner_id else None
-            out.append(
-                {
-                    "id": b.id,
-                    "title": b.title,
-                    "access_type": b.access_type,
-                    "owner_id": b.owner_id,
-                    "owner_name": owner.name if owner else None,
-                    "created_at": b.created_at.isoformat() if b.created_at else None,
-                    "questions_count": len(b.questions),
-                    "is_owner": b.owner_id == current_user_id,
-                    "is_purchased": b.id in purchased_bank_ids,
-                }
-            )
         return out, 200
 
 
@@ -529,15 +616,15 @@ class QuestionBankDetail(Resource):
     @question_bank_ns.response(403, "Only owner can update")
     @jwt_required()
     def patch(self, bank_id):
-        """Update a question bank. Use form fields for title and/or access_type."""
+        """Update a question bank. Query string, JSON, or form for title and/or access_type."""
         bank, err = _ensure_can_edit_bank(bank_id)
         if err:
             return err
-        args = bank_update_parser.parse_args()
-        if args.get("title") is not None and trim_str(args["title"]):
-            bank.title = trim_str(args["title"])
-        if args.get("access_type") is not None:
-            at = trim_str(args["access_type"]).lower()
+        title_raw, access_raw = _bank_update_params_from_request()
+        if title_raw is not None and trim_str(str(title_raw)):
+            bank.title = trim_str(str(title_raw))
+        if access_raw is not None:
+            at = trim_str(str(access_raw)).lower()
             if at in ACCESS_TYPES:
                 bank.access_type = at
                 bank.is_public = at == ACCESS_PUBLIC
@@ -695,6 +782,202 @@ class QuestionBankTopicDetail(Resource):
         return {"message": "Topic deleted."}, 200
 
 
+# ----- Levels in bank -----
+@question_bank_ns.route("/<int:bank_id>/levels")
+class QuestionBankLevels(Resource):
+    @question_bank_ns.response(404, "Bank not found or not visible")
+    @jwt_required(optional=True)
+    def get(self, bank_id):
+        bank = QuestionBank.query.get(bank_id)
+        if not bank:
+            return {"message": "Question bank not found."}, 404
+        if not _can_view_bank(bank, _current_user_id()):
+            return {"message": "Question bank not found."}, 404
+        rows = BankLevel.query.filter_by(bank_id=bank.id).order_by(BankLevel.sort_order.asc(), BankLevel.id.asc()).all()
+        return [
+            {
+                "id": x.id,
+                "bank_id": x.bank_id,
+                "name": x.name,
+                "sort_order": x.sort_order,
+                "created_at": x.created_at.isoformat() if x.created_at else None,
+            }
+            for x in rows
+        ], 200
+
+    @jwt_required()
+    def post(self, bank_id):
+        bank, err = _ensure_can_edit_bank(bank_id)
+        if err:
+            return err
+        merged = _merge_topic_create_inputs()
+        name = trim_str(merged.get("name") or "")
+        if not name:
+            return {"message": "Field 'name' is required."}, 400
+        try:
+            sort_order = int(merged.get("sort_order", 0) or 0)
+        except (TypeError, ValueError):
+            return {"message": "Field 'sort_order' must be an integer."}, 400
+        if BankLevel.query.filter_by(bank_id=bank.id, name=name).first():
+            return {"message": "A level with this name already exists in this bank."}, 400
+        row = BankLevel(bank_id=bank.id, name=name, sort_order=sort_order)
+        db.session.add(row)
+        db.session.commit()
+        return {
+            "id": row.id,
+            "bank_id": row.bank_id,
+            "name": row.name,
+            "sort_order": row.sort_order,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }, 201
+
+
+@question_bank_ns.route("/<int:bank_id>/levels/<int:level_id>")
+class QuestionBankLevelDetail(Resource):
+    @jwt_required()
+    def patch(self, bank_id, level_id):
+        bank, err = _ensure_can_edit_bank(bank_id)
+        if err:
+            return err
+        row = BankLevel.query.filter_by(id=level_id, bank_id=bank.id).first()
+        if not row:
+            return {"message": "Level not found in this bank."}, 404
+        body = request.get_json(silent=True) or {}
+        if "name" in body:
+            name = trim_str(body.get("name") or "")
+            if not name:
+                return {"message": "Field 'name' cannot be empty."}, 400
+            existing = BankLevel.query.filter_by(bank_id=bank.id, name=name).first()
+            if existing and existing.id != row.id:
+                return {"message": "A level with this name already exists in this bank."}, 400
+            row.name = name
+        if "sort_order" in body:
+            try:
+                row.sort_order = int(body["sort_order"])
+            except (TypeError, ValueError):
+                return {"message": "Field 'sort_order' must be an integer."}, 400
+        db.session.commit()
+        return {
+            "id": row.id,
+            "bank_id": row.bank_id,
+            "name": row.name,
+            "sort_order": row.sort_order,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }, 200
+
+    @jwt_required()
+    def delete(self, bank_id, level_id):
+        bank, err = _ensure_can_edit_bank(bank_id)
+        if err:
+            return err
+        row = BankLevel.query.filter_by(id=level_id, bank_id=bank.id).first()
+        if not row:
+            return {"message": "Level not found in this bank."}, 404
+        db.session.delete(row)
+        db.session.commit()
+        return {"message": "Level deleted."}, 200
+
+
+# ----- Repeated levels in bank -----
+@question_bank_ns.route("/<int:bank_id>/repeated-levels")
+class QuestionBankRepeatedLevels(Resource):
+    @question_bank_ns.response(404, "Bank not found or not visible")
+    @jwt_required(optional=True)
+    def get(self, bank_id):
+        bank = QuestionBank.query.get(bank_id)
+        if not bank:
+            return {"message": "Question bank not found."}, 404
+        if not _can_view_bank(bank, _current_user_id()):
+            return {"message": "Question bank not found."}, 404
+        rows = (
+            BankRepeatedLevel.query.filter_by(bank_id=bank.id)
+            .order_by(BankRepeatedLevel.sort_order.asc(), BankRepeatedLevel.id.asc())
+            .all()
+        )
+        return [
+            {
+                "id": x.id,
+                "bank_id": x.bank_id,
+                "name": x.name,
+                "sort_order": x.sort_order,
+                "created_at": x.created_at.isoformat() if x.created_at else None,
+            }
+            for x in rows
+        ], 200
+
+    @jwt_required()
+    def post(self, bank_id):
+        bank, err = _ensure_can_edit_bank(bank_id)
+        if err:
+            return err
+        merged = _merge_topic_create_inputs()
+        name = trim_str(merged.get("name") or "")
+        if not name:
+            return {"message": "Field 'name' is required."}, 400
+        try:
+            sort_order = int(merged.get("sort_order", 0) or 0)
+        except (TypeError, ValueError):
+            return {"message": "Field 'sort_order' must be an integer."}, 400
+        if BankRepeatedLevel.query.filter_by(bank_id=bank.id, name=name).first():
+            return {"message": "A repeated level with this name already exists in this bank."}, 400
+        row = BankRepeatedLevel(bank_id=bank.id, name=name, sort_order=sort_order)
+        db.session.add(row)
+        db.session.commit()
+        return {
+            "id": row.id,
+            "bank_id": row.bank_id,
+            "name": row.name,
+            "sort_order": row.sort_order,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }, 201
+
+
+@question_bank_ns.route("/<int:bank_id>/repeated-levels/<int:repeated_level_id>")
+class QuestionBankRepeatedLevelDetail(Resource):
+    @jwt_required()
+    def patch(self, bank_id, repeated_level_id):
+        bank, err = _ensure_can_edit_bank(bank_id)
+        if err:
+            return err
+        row = BankRepeatedLevel.query.filter_by(id=repeated_level_id, bank_id=bank.id).first()
+        if not row:
+            return {"message": "Repeated level not found in this bank."}, 404
+        body = request.get_json(silent=True) or {}
+        if "name" in body:
+            name = trim_str(body.get("name") or "")
+            if not name:
+                return {"message": "Field 'name' cannot be empty."}, 400
+            existing = BankRepeatedLevel.query.filter_by(bank_id=bank.id, name=name).first()
+            if existing and existing.id != row.id:
+                return {"message": "A repeated level with this name already exists in this bank."}, 400
+            row.name = name
+        if "sort_order" in body:
+            try:
+                row.sort_order = int(body["sort_order"])
+            except (TypeError, ValueError):
+                return {"message": "Field 'sort_order' must be an integer."}, 400
+        db.session.commit()
+        return {
+            "id": row.id,
+            "bank_id": row.bank_id,
+            "name": row.name,
+            "sort_order": row.sort_order,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }, 200
+
+    @jwt_required()
+    def delete(self, bank_id, repeated_level_id):
+        bank, err = _ensure_can_edit_bank(bank_id)
+        if err:
+            return err
+        row = BankRepeatedLevel.query.filter_by(id=repeated_level_id, bank_id=bank.id).first()
+        if not row:
+            return {"message": "Repeated level not found in this bank."}, 404
+        db.session.delete(row)
+        db.session.commit()
+        return {"message": "Repeated level deleted."}, 200
+
+
 # ----- Questions in bank -----
 @question_bank_ns.route("/<int:bank_id>/questions")
 class QuestionBankQuestions(Resource):
@@ -713,7 +996,7 @@ class QuestionBankQuestions(Resource):
     @question_bank_ns.doc(
         description=(
             "Create a question (and optional answers) in this bank using JSON or form fields.\n"
-            "Optional topic: send topic_id, topicId, or topic: { \"id\": <number> } (must exist in this bank).\n\n"
+            "Use one topic field only: **topic_id** (integer, optional). Omit it if the question has no topic.\n\n"
             "Example body:\n"
             "{\n"
             '  \"text\": \"Question text\",\n'
@@ -781,13 +1064,13 @@ class QuestionBankQuestions(Resource):
 @question_bank_ns.route("/<int:bank_id>/questions/<int:question_id>")
 class QuestionBankQuestionDetail(Resource):
     @jwt_required()
-    @question_bank_ns.response(200, "Topic assignment updated")
+    @question_bank_ns.response(200, "Classification updated")
     @question_bank_ns.response(400, "Validation error")
     @question_bank_ns.response(401, "Not authenticated")
     @question_bank_ns.response(403, "Only owner can update")
     @question_bank_ns.response(404, "Bank or question not found")
     def patch(self, bank_id, question_id):
-        """Assign or clear the question's topic. JSON body: { \"topic_id\": <int> | null }."""
+        """Assign or clear topic/level/repeated_level using topic_id, level_id, repeated_level_id."""
         bank, err = _ensure_can_edit_bank(bank_id)
         if err:
             return err
@@ -795,10 +1078,19 @@ class QuestionBankQuestionDetail(Resource):
         if not question:
             return {"message": "Question not found in this bank."}, 404
         body = request.get_json(silent=True) or {}
-        if "topic_id" not in body:
-            return {"message": "Field 'topic_id' is required (use null to clear the topic)."}, 400
+        if not any(k in body for k in ("topic_id", "level_id", "repeated_level_id")):
+            return {
+                "message": "Provide at least one of: topic_id, level_id, repeated_level_id (use null to clear)."
+            }, 400
         try:
-            question.topic_id = resolve_topic_id_for_bank(bank.id, body.get("topic_id"))
+            if "topic_id" in body:
+                question.topic_id = resolve_topic_id_for_bank(bank.id, body.get("topic_id"))
+            if "level_id" in body:
+                question.level_id = resolve_level_id_for_bank(bank.id, body.get("level_id"))
+            if "repeated_level_id" in body:
+                question.repeated_level_id = resolve_repeated_level_id_for_bank(
+                    bank.id, body.get("repeated_level_id")
+                )
         except ValidationError as e:
             return {"message": str(e)}, 400
         db.session.commit()
@@ -920,16 +1212,4 @@ class QuestionBankUpgrade(Resource):
                 },
             }, 200
         except BankAccessError as e:
-            return {"message": str(e)}, 400
-
-@question_bank_ns.route("")
-class QuestionBankList(Resource):
-    @jwt_required()
-    def post(self):
-        args = bank_create_parser.parse_args()
-        user_id = _current_user_id()
-        try:
-            bank = create_bank(user_id, args.get("title"), args.get("access_type"))
-            return {"id": bank.id, "title": bank.title, "access_type": bank.access_type}, 201
-        except ValidationError as e:
             return {"message": str(e)}, 400

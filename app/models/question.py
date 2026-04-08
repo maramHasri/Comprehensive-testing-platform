@@ -15,6 +15,18 @@ class Question(db.Model):
         nullable=True,
         index=True,
     )
+    level_id = db.Column(
+        db.Integer,
+        db.ForeignKey("bank_levels.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    repeated_level_id = db.Column(
+        db.Integer,
+        db.ForeignKey("bank_repeated_levels.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     bank_version_id = db.Column(db.Integer, db.ForeignKey("bank_versions.id"), nullable=True, index=True)
     quiz_id = db.Column(db.Integer, db.ForeignKey("quizzes.id"), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
@@ -39,6 +51,8 @@ class Question(db.Model):
     source_question = db.relationship("Question", remote_side=[id], backref="derived_questions", lazy=True)
     bank_links = db.relationship("BankQuestion", backref="question", lazy=True, cascade="all, delete-orphan")
     topic = db.relationship("BankTopic", back_populates="questions")
+    level = db.relationship("BankLevel", back_populates="questions")
+    repeated_level = db.relationship("BankRepeatedLevel", back_populates="questions")
     attribution = db.relationship(
         "QuestionAttribution",
         backref="question",

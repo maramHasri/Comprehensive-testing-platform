@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 from app.extensions import db
-from app.models import BankTopic
+from app.models import BankTopic, BankLevel, BankRepeatedLevel
 from app.routes.question_banks.repository import (
     get_bank_by_id,
     create_question,
@@ -97,6 +97,10 @@ def _validate_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     raw_topic = _extract_topic_id_raw(payload)
     if raw_topic is not NOT_GIVEN:
         out["topic_id"] = raw_topic
+    if "level_id" in payload:
+        out["level_id"] = payload.get("level_id")
+    if "repeated_level_id" in payload:
+        out["repeated_level_id"] = payload.get("repeated_level_id")
     return out
 
 
@@ -108,6 +112,8 @@ def _topic_brief(question) -> Dict[str, Any] | None:
 
 
 def _question_to_dict(question) -> Dict[str, Any]:
+    lv = question.level
+    rl = question.repeated_level
     return {
         "id": question.id,
         "bank_id": question.bank_id,
@@ -120,6 +126,10 @@ def _question_to_dict(question) -> Dict[str, Any]:
         "base_time": question.base_time,
         "topic_id": question.topic_id,
         "topic": _topic_brief(question),
+        "level_id": question.level_id,
+        "level": {"id": lv.id, "name": lv.name} if lv else None,
+        "repeated_level_id": question.repeated_level_id,
+        "repeated_level": {"id": rl.id, "name": rl.name} if rl else None,
         "answers": [
             {"id": c.id, "text": c.text, "is_correct": c.is_correct}
             for c in question.choices
@@ -141,6 +151,36 @@ def resolve_topic_id_for_bank(bank_id: int, raw) -> int | None:
     if not t:
         raise ValidationError("Topic not found in this question bank.")
     return tid
+
+
+def resolve_level_id_for_bank(bank_id: int, raw) -> int | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        lid = int(raw)
+    except (TypeError, ValueError):
+        raise ValidationError("Field 'level_id' must be an integer or null.")
+    if lid <= 0:
+        return None
+    level = BankLevel.query.filter_by(id=lid, bank_id=bank_id).first()
+    if not level:
+        raise ValidationError("Level not found in this question bank.")
+    return lid
+
+
+def resolve_repeated_level_id_for_bank(bank_id: int, raw) -> int | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        rid = int(raw)
+    except (TypeError, ValueError):
+        raise ValidationError("Field 'repeated_level_id' must be an integer or null.")
+    if rid <= 0:
+        return None
+    repeated_level = BankRepeatedLevel.query.filter_by(id=rid, bank_id=bank_id).first()
+    if not repeated_level:
+        raise ValidationError("Repeated level not found in this question bank.")
+    return rid
 
 
 def create_question_with_answers(
@@ -168,6 +208,12 @@ def create_question_with_answers(
     topic_id = None
     if "topic_id" in data:
         topic_id = resolve_topic_id_for_bank(bank.id, data["topic_id"])
+    level_id = None
+    if "level_id" in data:
+        level_id = resolve_level_id_for_bank(bank.id, data["level_id"])
+    repeated_level_id = None
+    if "repeated_level_id" in data:
+        repeated_level_id = resolve_repeated_level_id_for_bank(bank.id, data["repeated_level_id"])
 
     try:
         latest_version = get_latest_version(bank.id)
@@ -186,6 +232,8 @@ def create_question_with_answers(
             original_question_id=original_question_id,
             base_time=base_time,
             topic_id=topic_id,
+            level_id=level_id,
+            repeated_level_id=repeated_level_id,
         )
         if answers:
             replace_question_answers(question, answers)

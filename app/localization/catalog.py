@@ -53,6 +53,10 @@ MESSAGE_CATALOG: dict[str, dict[str, str]] = {
         "en": "Email is required.",
         "ar": "البريد الإلكتروني مطلوب.",
     },
+    "AUTH_EMAIL_INVALID": {
+        "en": "Email format is invalid.",
+        "ar": "صيغة البريد الإلكتروني غير صحيحة.",
+    },
     "AUTH_PASSWORD_TOO_SHORT": {
         "en": "Password must be at least 8 characters.",
         "ar": "يجب أن تكون كلمة المرور 8 أحرف على الأقل.",
@@ -69,6 +73,10 @@ MESSAGE_CATALOG: dict[str, dict[str, str]] = {
         "en": "Registration successful.",
         "ar": "تم إنشاء الحساب بنجاح.",
     },
+    "AUTH_REGISTER_VERIFY_SENT": {
+        "en": "Registration successful. Please check your email to activate your account.",
+        "ar": "تم إنشاء الحساب بنجاح. يرجى تفقد بريدك لتفعيل الحساب.",
+    },
     "AUTH_PASSWORD_REQUIRED": {
         "en": "Password is required.",
         "ar": "كلمة المرور مطلوبة.",
@@ -76,6 +84,10 @@ MESSAGE_CATALOG: dict[str, dict[str, str]] = {
     "AUTH_LOGIN_INVALID": {
         "en": "Invalid email or password.",
         "ar": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+    },
+    "AUTH_VERIFY_REQUIRED": {
+        "en": "Please verify your email before logging in.",
+        "ar": "يرجى تفعيل بريدك الإلكتروني قبل تسجيل الدخول.",
     },
     "AUTH_LOGOUT_SUCCESS": {
         "en": "Logged out successfully.",
@@ -90,8 +102,32 @@ MESSAGE_CATALOG: dict[str, dict[str, str]] = {
         "ar": "إذا كان هناك حساب لهذا البريد، ستصلك تعليمات إعادة التعيين قريباً.",
     },
     "AUTH_EMAIL_SEND_FAILED": {
-        "en": "Could not send the reset email. Configure GMAIL_USER and GMAIL_APP_PASSWORD on the server.",
-        "ar": "تعذر إرسال بريد إعادة التعيين. اضبط إعدادات البريد على الخادم.",
+        "en": "Could not send email. Please try again later.",
+        "ar": "تعذر إرسال البريد الإلكتروني. حاول لاحقاً.",
+    },
+    "AUTH_VERIFY_TOKEN_REQUIRED": {
+        "en": "Verification token is required.",
+        "ar": "رمز التفعيل مطلوب.",
+    },
+    "AUTH_VERIFY_TOKEN_INVALID": {
+        "en": "Invalid verification link.",
+        "ar": "رابط التفعيل غير صالح.",
+    },
+    "AUTH_VERIFY_TOKEN_EXPIRED": {
+        "en": "Verification link expired. Request a new one.",
+        "ar": "انتهت صلاحية رابط التفعيل. اطلب رابطاً جديداً.",
+    },
+    "AUTH_EMAIL_VERIFIED": {
+        "en": "Email verified successfully. You can now log in.",
+        "ar": "تم تفعيل البريد بنجاح. يمكنك تسجيل الدخول الآن.",
+    },
+    "AUTH_EMAIL_ALREADY_VERIFIED": {
+        "en": "Email is already verified.",
+        "ar": "تم تفعيل البريد مسبقاً.",
+    },
+    "AUTH_RESEND_VERIFY_GENERIC": {
+        "en": "If an account exists and is not verified, a new activation email has been sent.",
+        "ar": "إذا كان الحساب موجوداً وغير مفعل، فقد تم إرسال رابط تفعيل جديد.",
     },
     "AUTH_EMAIL_AND_OTP_REQUIRED": {
         "en": "Email and OTP are required.",

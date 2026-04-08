@@ -15,6 +15,7 @@ class User(db.Model):
 
     role = db.Column(db.String(20), nullable=False)  # teacher | student
 
+    is_verified = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships

@@ -16,11 +16,15 @@ def create_question(
     original_question_id: int | None = None,
     base_time: int | None = None,
     topic_id: int | None = None,
+    level_id: int | None = None,
+    repeated_level_id: int | None = None,
 ) -> Question:
     latest_version = get_latest_version(bank_id)
     question = Question(
         bank_id=bank_id,
         topic_id=topic_id,
+        level_id=level_id,
+        repeated_level_id=repeated_level_id,
         bank_version_id=latest_version.id if latest_version else None,
         type=qtype,
         content=text,

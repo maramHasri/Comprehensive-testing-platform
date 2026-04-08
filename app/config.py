@@ -13,14 +13,9 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", str(7 * 24 * 3600)))
     )  # 7 days default
-
-    # Password reset (OTP)
-    OTP_EXPIRY_MINUTES = int(os.getenv("OTP_EXPIRY_MINUTES", "60"))
-    OTP_VERIFIED_WINDOW_MINUTES = int(os.getenv("OTP_VERIFIED_WINDOW_MINUTES", "15"))  # How long after verify-otp user can reset
-
-    # Rate limiting (forgot-password)
-    RATE_LIMIT_FORGOT_PASSWORD = os.getenv("RATE_LIMIT_FORGOT_PASSWORD", "7 per hour")
-
-    # Gmail SMTP — set GMAIL_USER and GMAIL_APP_PASSWORD in .env (Google App Password)
-    GMAIL_USER = os.getenv("GMAIL_USER")
-    GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+    EMAIL_VERIFY_TOKEN_EXPIRY_SECONDS = int(
+        os.getenv("EMAIL_VERIFY_TOKEN_EXPIRY_SECONDS", str(30 * 60))
+    )  # 30 minutes default
+    APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:5000")
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")

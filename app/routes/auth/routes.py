@@ -6,72 +6,37 @@ No business logic, no DB queries. All user-facing messages come from service (DB
 # TODO: Ensure all input validation rules remain in services/auth_service.py.
 from flask import request
 from flask_restx import Namespace, Resource, fields, reqparse
-from flask_jwt_extended import jwt_required, get_jwt
 
 from app.utils.localization import get_current_lang
 from app.services.auth_service import (
     register as register_svc,
     login as login_svc,
-    logout as logout_svc,
-    forgot_password as forgot_password_svc,
-    verify_otp as verify_otp_svc,
-    reset_password as reset_password_svc,
+    verify_email_token as verify_email_token_svc,
+    resend_verification as resend_verification_svc,
 )
 
 auth_ns = Namespace(
     " Authentication",
-    description="Register, login, logout, password reset. Responses follow Accept-Language (en/ar).",
+    description="Register, verify email, login. Responses follow Accept-Language (en/ar).",
 )
 
 register_parser = reqparse.RequestParser()
-register_parser.add_argument("name", type=str, required=True, location="form", help="Full name (required)")
-register_parser.add_argument("email", type=str, required=True, location="form", help="Email (required)")
-register_parser.add_argument("password", type=str, required=True, location="form", help="Password, min 8 chars (required)")
-register_parser.add_argument("role", type=str, required=True, location="form", choices=("teacher", "student", "admin"), help="teacher | student | admin")
+register_parser.add_argument("name", type=str, required=True, location=("args", "json", "form"), help="Full name (required)")
+register_parser.add_argument("email", type=str, required=True, location=("args", "json", "form"), help="Email (required)")
+register_parser.add_argument("password", type=str, required=True, location=("args", "json", "form"), help="Password, min 8 chars (required)")
+register_parser.add_argument("role", type=str, required=True, location=("args", "json", "form"), choices=("teacher", "student", "admin"), help="teacher | student | admin")
 
 login_parser = reqparse.RequestParser()
-login_parser.add_argument("email", type=str, required=True, location="form", help="Email (required)")
-login_parser.add_argument("password", type=str, required=True, location="form", help="Password (required)")
+login_parser.add_argument("email", type=str, required=True, location=("args", "json", "form"), help="Email (required)")
+login_parser.add_argument("password", type=str, required=True, location=("args", "json", "form"), help="Password (required)")
 
-forgot_parser = reqparse.RequestParser()
-forgot_parser.add_argument(
+resend_parser = reqparse.RequestParser()
+resend_parser.add_argument(
     "email",
     type=str,
     required=True,
     location=("args", "json", "form"),
     help="User email (required)",
-)
-
-verify_otp_parser = reqparse.RequestParser()
-verify_otp_parser.add_argument(
-    "email",
-    type=str,
-    required=True,
-    location=("args", "json", "form"),
-    help="Email (required)",
-)
-verify_otp_parser.add_argument(
-    "otp",
-    type=str,
-    required=True,
-    location=("args", "json", "form"),
-    help="6-digit OTP (required)",
-)
-
-reset_parser = reqparse.RequestParser()
-reset_parser.add_argument(
-    "email",
-    type=str,
-    required=True,
-    location=("args", "json", "form"),
-    help="Email (required)",
-)
-reset_parser.add_argument(
-    "new_password",
-    type=str,
-    required=True,
-    location=("args", "json", "form"),
-    help="New password, min 8 chars (required)",
 )
 
 token_model = auth_ns.model("Token", {"token": fields.String})
@@ -84,56 +49,15 @@ def _str_or_none(value):
     return s if s else None
 
 
-def _email_from_forgot_request() -> str | None:
-    """
-    Resolve email for forgot-password. Query string wins over JSON/form/reqparse so
-    Swagger/curl like POST ...?email=...& -d '' still works (reqparse can drop ?email=).
-    """
-    parsed = forgot_parser.parse_args()
+def _email_from_request(parsed_email: str | None) -> str | None:
     body = request.get_json(silent=True) or {}
     raw = (
         request.args.get("email")
         or body.get("email")
         or request.form.get("email")
-        or parsed.get("email")
+        or parsed_email
     )
     return _str_or_none(raw)
-
-
-def _verify_otp_params_from_request() -> tuple[str | None, str | None]:
-    parsed = verify_otp_parser.parse_args()
-    body = request.get_json(silent=True) or {}
-    email_raw = (
-        request.args.get("email")
-        or body.get("email")
-        or request.form.get("email")
-        or parsed.get("email")
-    )
-    otp_raw = (
-        request.args.get("otp")
-        or body.get("otp")
-        or request.form.get("otp")
-        or parsed.get("otp")
-    )
-    return _str_or_none(email_raw), _str_or_none(otp_raw)
-
-
-def _reset_password_params_from_request() -> tuple[str | None, str | None]:
-    parsed = reset_parser.parse_args()
-    body = request.get_json(silent=True) or {}
-    email_raw = (
-        request.args.get("email")
-        or body.get("email")
-        or request.form.get("email")
-        or parsed.get("email")
-    )
-    pw_raw = (
-        request.args.get("new_password")
-        or body.get("new_password")
-        or request.form.get("new_password")
-        or parsed.get("new_password")
-    )
-    return _str_or_none(email_raw), _str_or_none(pw_raw)
 
 
 @auth_ns.route("/register")
@@ -156,7 +80,6 @@ class Register(Resource):
 @auth_ns.route("/login")
 class Login(Resource):
     @auth_ns.expect(login_parser)
-    @auth_ns.marshal_with(token_model)
     @auth_ns.response(401, "Invalid credentials")
     def post(self):
         args = login_parser.parse_args()
@@ -168,55 +91,24 @@ class Login(Resource):
         return result, status
 
 
-@auth_ns.route("/logout")
-class Logout(Resource):
-    @auth_ns.response(200, "Logged out")
-    @auth_ns.response(401, "Not authenticated")
-    @jwt_required()
-    def post(self):
-        payload = get_jwt()
-        jti = payload.get("jti") if payload else None
-        result, status = logout_svc(jti=jti, lang=get_current_lang())
+@auth_ns.route("/verify-email")
+class VerifyEmail(Resource):
+    @auth_ns.doc(params={"token": "Verification token sent by email"})
+    @auth_ns.response(200, "Email verified")
+    @auth_ns.response(400, "Token invalid or expired")
+    def get(self):
+        token = _str_or_none(request.args.get("token"))
+        result, status = verify_email_token_svc(token=token, lang=get_current_lang())
         return result, status
 
 
-@auth_ns.route("/forgot-password")
-class ForgotPassword(Resource):
-    @auth_ns.expect(forgot_parser)
-    @auth_ns.response(200, "Generic message (always; avoids email enumeration)")
-    @auth_ns.response(429, "Too many requests")
-    @auth_ns.response(503, "Email not sent (SMTP not configured or send failed)")
+@auth_ns.route("/resend-verification")
+class ResendVerification(Resource):
+    @auth_ns.expect(resend_parser)
+    @auth_ns.response(200, "Generic resend message")
+    @auth_ns.response(503, "Email sending failed")
     def post(self):
-        email = _email_from_forgot_request()
-        result, status = forgot_password_svc(email=email, lang=get_current_lang())
-        return result, status
-
-
-@auth_ns.route("/verify-otp")
-class VerifyOtp(Resource):
-    @auth_ns.expect(verify_otp_parser)
-    @auth_ns.response(200, "Code verified")
-    @auth_ns.response(400, "Invalid or expired code")
-    def post(self):
-        email, otp = _verify_otp_params_from_request()
-        result, status = verify_otp_svc(
-            email=email,
-            otp=otp,
-            lang=get_current_lang(),
-        )
-        return result, status
-
-
-@auth_ns.route("/reset-password")
-class ResetPassword(Resource):
-    @auth_ns.expect(reset_parser)
-    @auth_ns.response(200, "Password reset successfully")
-    @auth_ns.response(400, "Validation error or expired session")
-    def post(self):
-        email, new_password = _reset_password_params_from_request()
-        result, status = reset_password_svc(
-            email=email,
-            new_password=new_password,
-            lang=get_current_lang(),
-        )
+        parsed = resend_parser.parse_args()
+        email = _email_from_request(parsed.get("email"))
+        result, status = resend_verification_svc(email=email, lang=get_current_lang())
         return result, status
