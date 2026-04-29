@@ -115,10 +115,10 @@ class CreateQuizFromBank(Resource):
     @quiz_ns.response(201, "Quiz created", quiz_response_model)
     @quiz_ns.response(400, "Validation error or bank empty", error_model)
     @quiz_ns.response(401, "Not authenticated", error_model)
-    @quiz_ns.response(403, "Teachers only", error_model)
+    @quiz_ns.response(403, "Exam providers only", error_model)
     @quiz_ns.response(404, "Question bank not found", error_model)
     def post(self):
-        """Create quiz from bank. Send question_bank_id, title, number_of_questions. Responses follow Accept-Language (en/ar). Teacher only."""
+        """Create quiz from bank. Send question_bank_id, title, number_of_questions. Responses follow Accept-Language (en/ar). Exam provider only."""
         from app.services.create_quiz_service import create_quiz_from_bank as create_from_bank_svc
 
         lang = get_current_lang()
@@ -126,14 +126,14 @@ class CreateQuizFromBank(Resource):
         if not user_id_str:
             return {"message": get_message("COMMON_AUTH_REQUIRED", lang)}, 401
         jwt_data = get_jwt()
-        if jwt_data.get("role") != "teacher":
+        if jwt_data.get("role") not in {"provider", "exam provider"}:
             return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
         try:
             user_id = int(user_id_str)
         except (ValueError, TypeError):
             return {"message": get_message("COMMON_INVALID_TOKEN", lang)}, 401
         creator = get_user_by_id(user_id)
-        if not creator or creator.role != "teacher":
+        if not creator or creator.role not in {"provider", "exam provider"}:
             return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
 
         args = from_bank_parser.parse_args()
@@ -161,24 +161,24 @@ class QuizCreate(Resource):
     @quiz_ns.marshal_with(quiz_response_model, code=201)
     @quiz_ns.response(400, "Validation error", error_model)
     @quiz_ns.response(401, "Unauthorized", error_model)
-    @quiz_ns.response(403, "Forbidden (not a teacher)", error_model)
+    @quiz_ns.response(403, "Forbidden (not an exam provider)", error_model)
     @quiz_ns.response(500, "Server error", error_model)
     def post(self):
-        """Create a new empty quiz (Teacher only). Add questions manually or use POST /from-bank to create from a question bank."""
+        """Create a new empty quiz (Exam provider only). Add questions manually or use POST /from-bank to create from a question bank."""
         try:
             lang = get_current_lang()
             user_id_str = get_jwt_identity()
             if not user_id_str:
                 return {"message": get_message("COMMON_AUTH_REQUIRED", lang)}, 401
             jwt_data = get_jwt()
-            if jwt_data.get("role") != "teacher":
+            if jwt_data.get("role") not in {"provider", "exam provider"}:
                 return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
             try:
                 user_id = int(user_id_str)
             except (ValueError, TypeError):
                 return {"message": get_message("COMMON_INVALID_TOKEN", lang)}, 401
             creator = get_user_by_id(user_id)
-            if not creator or creator.role != "teacher":
+            if not creator or creator.role not in {"provider", "exam provider"}:
                 return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
             args = quiz_create_parser.parse_args()
             total_score = int(args.get("total_score") or 0)

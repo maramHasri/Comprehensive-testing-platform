@@ -62,8 +62,8 @@ MESSAGE_CATALOG: dict[str, dict[str, str]] = {
         "ar": "يجب أن تكون كلمة المرور 8 أحرف على الأقل.",
     },
     "AUTH_ROLE_INVALID": {
-        "en": "Role must be teacher, student, or admin.",
-        "ar": "يجب أن يكون الدور: معلم أو طالب أو مسؤول.",
+        "en": "Role must be super admin, exam provider, institution, supervisor, observer, or student.",
+        "ar": "يجب أن يكون الدور: مشرف عام أو مزود اختبارات أو مؤسسة أو مشرف أو مراقب أو طالب.",
     },
     "AUTH_EMAIL_EXISTS": {
         "en": "An account with this email already exists.",
@@ -125,6 +125,55 @@ MESSAGE_CATALOG: dict[str, dict[str, str]] = {
         "en": "Email is already verified.",
         "ar": "تم تفعيل البريد مسبقاً.",
     },
+    # --- Auth: HTML verify-link pages (GET /auth/verify/<token>) ---
+    "AUTH_PAGE_VERIFY_SUCCESS_TITLE": {
+        "en": "Account verified",
+        "ar": "تم تفعيل الحساب",
+    },
+    "AUTH_PAGE_VERIFY_SUCCESS_BODY": {
+        "en": "Your account has been successfully verified. You can continue in the app.",
+        "ar": "تم تفعيل حسابك بنجاح. يمكنك المتابعة في التطبيق.",
+    },
+    "AUTH_PAGE_REDIRECTING": {
+        "en": "Redirecting to your dashboard in a few seconds…",
+        "ar": "جاري تحويلك إلى لوحة التحكم خلال ثوانٍ…",
+    },
+    "AUTH_PAGE_VERIFY_ALREADY_TITLE": {
+        "en": "Already verified",
+        "ar": "مفعّل مسبقاً",
+    },
+    "AUTH_PAGE_VERIFY_ALREADY_BODY": {
+        "en": "This email is already verified. You can sign in.",
+        "ar": "تم تفعيل هذا البريد مسبقاً. يمكنك تسجيل الدخول.",
+    },
+    "AUTH_PAGE_VERIFY_EXPIRED_TITLE": {
+        "en": "Link expired",
+        "ar": "انتهت صلاحية الرابط",
+    },
+    "AUTH_PAGE_VERIFY_EXPIRED_BODY": {
+        "en": "This verification link has expired. Request a new activation email from the app.",
+        "ar": "انتهت صلاحية رابط التفعيل. اطلب رسالة تفعيل جديدة من التطبيق.",
+    },
+    "AUTH_PAGE_VERIFY_INVALID_TITLE": {
+        "en": "Invalid link",
+        "ar": "رابط غير صالح",
+    },
+    "AUTH_PAGE_VERIFY_INVALID_BODY": {
+        "en": "This verification link is invalid or has already been used.",
+        "ar": "رابط التفعيل غير صالح أو تم استخدامه مسبقاً.",
+    },
+    "AUTH_PAGE_VERIFY_MISSING_TITLE": {
+        "en": "Missing link",
+        "ar": "الرابط غير مكتمل",
+    },
+    "AUTH_PAGE_VERIFY_MISSING_BODY": {
+        "en": "No verification token was provided.",
+        "ar": "لم يتم إرسال رمز التفعيل.",
+    },
+    "AUTH_PAGE_RESEND_INSTRUCTION": {
+        "en": "Use “Resend verification” in the app with your email, or call POST on:",
+        "ar": "استخدم «إعادة إرسال التفعيل» في التطبيق مع بريدك، أو أرسل طلب POST إلى:",
+    },
     "AUTH_RESEND_VERIFY_GENERIC": {
         "en": "If an account exists and is not verified, a new activation email has been sent.",
         "ar": "إذا كان الحساب موجوداً وغير مفعل، فقد تم إرسال رابط تفعيل جديد.",
@@ -171,8 +220,8 @@ MESSAGE_CATALOG: dict[str, dict[str, str]] = {
         "ar": "جلسة غير صالحة أو منتهية. سجّل الدخول مجدداً.",
     },
     "QUIZ_TEACHERS_ONLY": {
-        "en": "Only teachers can perform this action.",
-        "ar": "يمكن للمعلمين فقط تنفيذ هذا الإجراء.",
+        "en": "Only exam providers can perform this action.",
+        "ar": "يمكن لمزودي الاختبارات فقط تنفيذ هذا الإجراء.",
     },
     "QUIZ_TITLE_REQUIRED": {
         "en": "Quiz title is required.",

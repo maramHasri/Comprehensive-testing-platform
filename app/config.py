@@ -17,5 +17,10 @@ class Config:
         os.getenv("EMAIL_VERIFY_TOKEN_EXPIRY_SECONDS", str(30 * 60))
     )  # 30 minutes default
     APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:5000")
-    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+    # Optional SPA URLs after email verification (defaults to APP_BASE_URL/dashboard)
+    FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "").strip()
+    FRONTEND_POST_VERIFY_REDIRECT_URL = os.getenv("FRONTEND_POST_VERIFY_REDIRECT_URL", "").strip()
+    GMAIL_USER = os.getenv("GMAIL_USER")
+    GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+    SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

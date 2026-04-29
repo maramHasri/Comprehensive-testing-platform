@@ -1,3 +1,6 @@
+from app.services.auth_service.roles import ALLOWED_REGISTER_ROLES
+
+
 def validate_register_input(name, email, password, role):
     if not (name or "").strip():
         return "AUTH_NAME_REQUIRED"
@@ -8,7 +11,7 @@ def validate_register_input(name, email, password, role):
     if len(password or "") < 8:
         return "AUTH_PASSWORD_TOO_SHORT"
 
-    if (role or "").strip().lower() not in ("teacher", "student", "admin"):
+    if (role or "").strip().lower() not in ALLOWED_REGISTER_ROLES:
         return "AUTH_ROLE_INVALID"
 
     return None

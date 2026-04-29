@@ -1,7 +1,7 @@
 from sqlalchemy import func
 
 from app.extensions import db
-from app.models import User
+from app.models import User, Role
 
 
 def get_user_by_email(email: str):
@@ -18,8 +18,20 @@ def get_user_by_id(user_id: int):
 
 def create_user(name: str, email: str, password: str, role: str):
     email_norm = (email or "").strip().lower()
-    user = User(name=name, email=email_norm, role=role)
+    user_name = (name or "").strip()
+    user = User(full_name=user_name, email=email_norm)
     user.set_password(password)
     db.session.add(user)
     db.session.flush()
     return user
+
+
+def get_role_by_name(name: str):
+    return Role.query.filter(func.lower(Role.name) == (name or "").strip().lower()).first()
+
+
+def create_role(name: str):
+    role = Role(name=(name or "").strip().lower())
+    db.session.add(role)
+    db.session.flush()
+    return role

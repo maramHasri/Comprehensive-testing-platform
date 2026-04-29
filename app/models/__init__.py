@@ -6,3 +6,20 @@ from .question import Question, Choice, BankQuestion, QuestionAttribution
 from .quiz import Quiz, QuizQuestion
 from .quiz_attempt import QuizAttempt
 from .question_attempt import QuestionAttempt
+from .role import Role
+from .user_role import UserRole
+from .institution_user import InstitutionUser, INSTITUTION_USER_ROLES
+from .provider_profile import ProviderProfile
+from .student_profile import StudentProfile
+from .invitation import Invitation
+from .provider_student import ProviderStudent
+from .provider import (
+    Provider,
+    ProviderUser,
+    ProviderType,
+    ProviderMembershipRole,
+    IndividualProfile,
+    OrganizationProfile,
+)
+from .institution import Institution
+from .exam_domain import Exam, ExamSession, ExamSessionLog, ExamSessionStatus
