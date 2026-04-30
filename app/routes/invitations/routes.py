@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import uuid
 from urllib.parse import quote, urlparse
 
@@ -15,6 +15,7 @@ from app.models import (
     ProviderStudent,
     ProviderUser,
     Role,
+    StudentProfile,
     User,
 )
 from app.services.email_template_service import send_activation_email
@@ -34,6 +35,7 @@ register_student_parser.add_argument("invite_link", type=str, required=False, lo
 register_student_parser.add_argument("email", type=str, required=True, location=("args", "json", "form"))
 register_student_parser.add_argument("password", type=str, required=True, location=("args", "json", "form"))
 register_student_parser.add_argument("full_name", type=str, required=False, location=("args", "json", "form"))
+register_student_parser.add_argument("birth_date", type=str, required=False, location=("args", "json", "form"))
 register_student_parser.add_argument("phone", type=str, required=False, location=("args", "json", "form"))
 register_student_parser.add_argument("country", type=str, required=False, location=("args", "json", "form"))
 
@@ -243,8 +245,15 @@ class RegisterStudentByInvitation(Resource):
         email = (args.get("email") or "").strip().lower()
         password = args.get("password") or ""
         full_name = (args.get("full_name") or "").strip()
+        birth_date_raw = (args.get("birth_date") or "").strip()
         phone = (args.get("phone") or "").strip() or None
         country = (args.get("country") or "").strip() or None
+        birth_date_value: date | None = None
+        if birth_date_raw:
+            try:
+                birth_date_value = datetime.strptime(birth_date_raw, "%Y-%m-%d").date()
+            except ValueError:
+                return {"message": "birth_date must be in YYYY-MM-DD format."}, 400
         invitation = Invitation.query.filter_by(token=token).first()
         if invitation is None:
             return {"message": "Invitation not found."}, 404
@@ -272,6 +281,13 @@ class RegisterStudentByInvitation(Resource):
         student.roles.append(student_role)
         db.session.add(student)
         db.session.flush()
+        db.session.add(
+            StudentProfile(
+                user_id=student.id,
+                full_name=full_name,
+                birth_date=birth_date_value,
+            )
+        )
         try:
             _link_student_with_sender(invitation, student)
         except ValueError as err:

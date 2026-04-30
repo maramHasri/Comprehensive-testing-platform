@@ -8,6 +8,7 @@ class StudentProfile(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     full_name = db.Column(db.String(255), nullable=False)
+    birth_date = db.Column(db.Date, nullable=True)
     university = db.Column(db.String(255), nullable=True)
     student_number = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
