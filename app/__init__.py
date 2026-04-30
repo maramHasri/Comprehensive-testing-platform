@@ -1,4 +1,5 @@
 from flask import Flask
+import socket
 from werkzeug.exceptions import HTTPException
 from flask_jwt_extended.exceptions import JWTDecodeError, NoAuthorizationError, InvalidHeaderError
 from jwt.exceptions import InvalidSubjectError, ExpiredSignatureError
@@ -7,9 +8,22 @@ from app.config import Config
 from app.routes import api
 from app.services.auth_service.roles import ensure_default_roles
 
+def test_connection() -> None:
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    timeout_seconds: int = 10
+    try:
+        with socket.create_connection((smtp_host, smtp_port), timeout=timeout_seconds):
+            print(f"[startup] SMTP connectivity OK: {smtp_host}:{smtp_port}")
+    except OSError as err:
+        print(f"[startup] SMTP connectivity FAILED: {smtp_host}:{smtp_port} ({err})")
+    except Exception as err:
+        print(f"[startup] SMTP connectivity FAILED with unexpected error: {err}")
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    test_connection()
 
     @app.get("/invite/<string:token>")
     def invite_entry(token: str):
