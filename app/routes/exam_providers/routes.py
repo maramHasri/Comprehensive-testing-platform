@@ -16,6 +16,8 @@ from app.models import Provider, ProviderStudent, ProviderUser, Role, User
 from app.repositories.auth_repository import create_session
 from app.services.email_template_service import send_activation_email
 from app.utils.email_verification_token import generate_email_verification_token
+from app.utils.iam_helpers import build_user_jwt_claims, ensure_membership, ensure_provider_organization, user_has_any_legacy_role
+from app.models.membership import MembershipRole, MembershipStatus
 
 exam_providers_ns = Namespace("Exam Providers", description="Register and login for exam providers")
 
@@ -165,6 +167,14 @@ class RegisterExamProvider(Resource):
         db.session.add(provider)
         db.session.flush()
         db.session.add(ProviderUser(user_id=user.id, provider_id=provider.id, role="admin"))
+        db.session.flush()
+        organization_id = ensure_provider_organization(provider)
+        ensure_membership(
+            user.id,
+            organization_id,
+            MembershipRole.ADMIN.value,
+            status=MembershipStatus.ACTIVE.value,
+        )
         db.session.commit()
         if not _send_activation_for_user(user):
             return {"message": "Registration created, but activation email could not be sent."}, 503
@@ -189,7 +199,7 @@ class LoginExamProvider(Resource):
         if user is not None and user.check_password(password):
             if not user.is_active:
                 return {"message": "Please verify your email before logging in."}, 403
-            has_provider_role = any(role.name in {"provider", "exam provider"} for role in user.roles)
+            has_provider_role = user_has_any_legacy_role(user, "provider", "exam provider", "instructor")
             if not has_provider_role:
                 return {"message": "Invalid credentials."}, 401
             membership = ProviderUser.query.filter_by(user_id=user.id).first()
@@ -209,9 +219,17 @@ class LoginExamProvider(Resource):
         expires_at = datetime.utcnow() + expires_delta
         jti = str(uuid.uuid4())
         identity = str(user.id) if user is not None else f"provider:{provider.id}"
+        if user is not None:
+            claims = build_user_jwt_claims(user)
+            claims["jti"] = jti
+            claims["role"] = "provider"
+            claims["provider_id"] = provider.id
+            claims["trust_level"] = provider.trust_level
+        else:
+            claims = {"role": "provider", "provider_id": provider.id, "trust_level": provider.trust_level, "jti": jti}
         token = create_access_token(
             identity=identity,
-            additional_claims={"role": "provider", "provider_id": provider.id, "trust_level": provider.trust_level, "jti": jti},
+            additional_claims=claims,
             expires_delta=expires_delta,
         )
         if user is not None:

@@ -234,6 +234,7 @@ class GetInstitutionById(Resource):
 
 
 
+
 @auth_ns.route("/resend-verification")
 class ResendVerification(Resource):
     @auth_ns.expect(resend_parser)

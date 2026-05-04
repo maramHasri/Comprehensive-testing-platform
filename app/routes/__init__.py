@@ -6,6 +6,7 @@ Namespaces are registered in user-journey order for clear Swagger presentation:
 from flask_restx import Api
 
 from app.routes.auth.routes import auth_ns
+from app.routes.users import users_ns
 from app.routes.exam_providers.routes import exam_providers_ns
 from app.routes.super_admin.routes import super_admin_ns
 from app.routes.invitations.routes import invitations_ns
@@ -39,6 +40,7 @@ api = Api(
 
 # Register in exact order so Swagger sections follow the user journey
 api.add_namespace(auth_ns, path="/auth")
+api.add_namespace(users_ns, path="/api/users")
 api.add_namespace(super_admin_ns, path="/super-admin")
 api.add_namespace(exam_providers_ns, path="/exam-providers")
 api.add_namespace(invitations_ns, path="/api")

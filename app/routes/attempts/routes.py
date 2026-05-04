@@ -7,6 +7,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.extensions import db
 from app.models import Quiz, QuizAttempt, User
+from app.utils.iam_helpers import user_has_any_legacy_role
 
 attempt_ns = Namespace(
     " Attempts / Submissions",
@@ -53,7 +54,7 @@ class QuizAttemptsList(Resource):
         if current_user_id is None:
             return {"message": "Authentication required."}, 401
         user = User.query.get(current_user_id)
-        if not user or user.role != "student":
+        if not user or not user_has_any_legacy_role(user, "student"):
             return {"message": "Only students can start quiz attempts."}, 403
         total_seconds = quiz.total_time_seconds or 0
         attempt = QuizAttempt(

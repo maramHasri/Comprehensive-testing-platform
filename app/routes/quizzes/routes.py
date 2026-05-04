@@ -21,6 +21,17 @@ from app.services.quiz_service import (
 )
 from app.utils.localization import get_current_lang
 from app.utils.request_validation import trim_str
+from app.utils.iam_helpers import user_has_any_legacy_role
+
+
+def jwt_allows_exam_provider(jwt_data: dict) -> bool:
+    primary = jwt_data.get("role")
+    extra = jwt_data.get("roles") or []
+    bucket: set[str] = set()
+    if isinstance(primary, str):
+        bucket.add(primary.strip().lower())
+    bucket.update(str(r).strip().lower() for r in extra if isinstance(r, str))
+    return not bucket.isdisjoint({"provider", "exam provider", "instructor"})
 
 logger = logging.getLogger(__name__)
 
@@ -126,14 +137,14 @@ class CreateQuizFromBank(Resource):
         if not user_id_str:
             return {"message": get_message("COMMON_AUTH_REQUIRED", lang)}, 401
         jwt_data = get_jwt()
-        if jwt_data.get("role") not in {"provider", "exam provider"}:
+        if not jwt_allows_exam_provider(jwt_data):
             return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
         try:
             user_id = int(user_id_str)
         except (ValueError, TypeError):
             return {"message": get_message("COMMON_INVALID_TOKEN", lang)}, 401
         creator = get_user_by_id(user_id)
-        if not creator or creator.role not in {"provider", "exam provider"}:
+        if not creator or not user_has_any_legacy_role(creator, "provider", "exam provider", "instructor"):
             return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
 
         args = from_bank_parser.parse_args()
@@ -171,14 +182,14 @@ class QuizCreate(Resource):
             if not user_id_str:
                 return {"message": get_message("COMMON_AUTH_REQUIRED", lang)}, 401
             jwt_data = get_jwt()
-            if jwt_data.get("role") not in {"provider", "exam provider"}:
+            if not jwt_allows_exam_provider(jwt_data):
                 return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
             try:
                 user_id = int(user_id_str)
             except (ValueError, TypeError):
                 return {"message": get_message("COMMON_INVALID_TOKEN", lang)}, 401
             creator = get_user_by_id(user_id)
-            if not creator or creator.role not in {"provider", "exam provider"}:
+            if not creator or not user_has_any_legacy_role(creator, "provider", "exam provider", "instructor"):
                 return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
             args = quiz_create_parser.parse_args()
             total_score = int(args.get("total_score") or 0)

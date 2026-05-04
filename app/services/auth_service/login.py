@@ -7,6 +7,7 @@ from flask_jwt_extended import create_access_token
 from app.repositories.auth_repository import create_session
 from app.repositories.user_repository import get_user_by_email
 from app.services.auth_service.validators import validate_login_input
+from app.utils.iam_helpers import build_user_jwt_claims
 
 
 def login_user(email, password):
@@ -23,9 +24,11 @@ def login_user(email, password):
 
     jti = str(uuid.uuid4())
 
+    claims = build_user_jwt_claims(user)
+    claims["jti"] = jti
     access_token = create_access_token(
         identity=str(user.id),
-        additional_claims={"role": user.role, "jti": jti},
+        additional_claims=claims,
         expires_delta=expires_delta,
     )
 

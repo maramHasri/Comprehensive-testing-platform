@@ -9,8 +9,9 @@ from flask_restx import Namespace, Resource, reqparse
 from app.extensions import db
 from app.models import (
     Institution,
-    InstitutionUser,
     Invitation,
+    Membership,
+    Organization,
     Provider,
     ProviderStudent,
     ProviderUser,
@@ -18,12 +19,19 @@ from app.models import (
     StudentProfile,
     User,
 )
+from app.models.membership import MembershipRole, MembershipStatus
+from app.models.organization import OrganizationKind
+from app.utils.iam_helpers import (
+    ensure_institution_organization,
+    ensure_membership,
+    ensure_provider_organization,
+    get_or_create_platform_organization,
+    user_has_any_legacy_role,
+)
 from app.services.email_template_service import send_activation_email
 from app.utils.email_verification_token import generate_email_verification_token
 
 invitations_ns = Namespace("Invitations", description="Unified invitation APIs for institutions and providers.")
-
-STAFF_ROLES: tuple[str, ...] = ("admin", "instructor", "supervisor", "observer")
 
 create_invitation_parser = reqparse.RequestParser()
 create_invitation_parser.add_argument("max_uses", type=int, required=False, default=50, location=("json", "form"))
@@ -105,22 +113,39 @@ def _get_sender_from_identity(identity: str | int | None) -> tuple[str | None, i
     if not identity_str.isdigit():
         return None, None, None
     user_id = int(identity_str)
-    memberships = InstitutionUser.query.filter_by(user_id=user_id).all()
-    for membership in memberships:
-        if membership.role not in STAFF_ROLES:
+    staff_membership_roles = {
+        MembershipRole.TEACHER.value,
+        MembershipRole.ADMIN.value,
+        MembershipRole.EXAMINER.value,
+    }
+    for m in (
+        Membership.query.filter_by(user_id=user_id, status=MembershipStatus.ACTIVE.value)
+        .join(Organization, Membership.organization_id == Organization.id)
+        .all()
+    ):
+        if m.role not in staff_membership_roles:
             continue
-        institution_by_membership = Institution.query.filter_by(id=membership.institution_id).first()
-        if institution_by_membership is None:
+        org = m.organization
+        if org is None:
             continue
-        if institution_by_membership.trust_level in ("trust", "trusted", "verified"):
-            return "institution", int(institution_by_membership.id), institution_by_membership.name
+        if org.kind == OrganizationKind.INSTITUTION.value and org.institution_id is not None:
+            institution_by_membership = Institution.query.filter_by(id=org.institution_id).first()
+            if (
+                institution_by_membership is not None
+                and institution_by_membership.trust_level in ("trust", "trusted", "verified")
+            ):
+                return "institution", int(institution_by_membership.id), institution_by_membership.name
+        if org.kind == OrganizationKind.PROVIDER.value and org.provider_id is not None:
+            provider = Provider.query.get(org.provider_id)
+            provider_user = User.query.get(user_id)
+            if provider is not None and provider.trust_level in ("trust", "trusted", "verified"):
+                sender_name = provider.full_name or (provider_user.full_name if provider_user else None)
+                return "provider", user_id, sender_name
     provider_membership = ProviderUser.query.filter_by(user_id=user_id).first()
     provider = None
     if provider_membership is not None:
         provider = Provider.query.get(provider_membership.provider_id)
     if provider is None:
-        # Backward compatibility: some legacy provider accounts were created
-        # without a provider_users link. Fall back to provider email mapping.
         provider_user = User.query.get(user_id)
         if provider_user is not None:
             provider = Provider.query.filter_by(email=provider_user.email).first()
@@ -133,19 +158,14 @@ def _get_sender_from_identity(identity: str | int | None) -> tuple[str | None, i
 
 def _link_student_with_sender(invitation: Invitation, user: User) -> bool:
     if invitation.sender_type == "institution":
-        existing_membership = InstitutionUser.query.filter_by(
-            user_id=user.id,
-            institution_id=invitation.sender_id,
-        ).first()
-        if existing_membership is not None:
+        institution = Institution.query.filter_by(id=invitation.sender_id).first()
+        if institution is None:
             return False
-        db.session.add(
-            InstitutionUser(
-                user_id=user.id,
-                institution_id=invitation.sender_id,
-                role="student",
-            )
-        )
+        org_id = ensure_institution_organization(institution)
+        existing_m = Membership.query.filter_by(user_id=user.id, organization_id=org_id).first()
+        if existing_m is not None:
+            return False
+        ensure_membership(user.id, org_id, MembershipRole.STUDENT.value, status=MembershipStatus.ACTIVE.value)
         return True
     provider_owner_id = invitation.sender_id
     provider_membership = ProviderUser.query.filter_by(user_id=provider_owner_id).first()
@@ -166,6 +186,14 @@ def _link_student_with_sender(invitation: Invitation, user: User) -> bool:
                 db.session.flush()
     if provider_id is None:
         raise ValueError("Provider sender is invalid.")
+    provider = Provider.query.get(provider_id)
+    if provider is None:
+        raise ValueError("Provider sender is invalid.")
+    org_id = ensure_provider_organization(provider)
+    existing_m = Membership.query.filter_by(user_id=user.id, organization_id=org_id).first()
+    if existing_m is not None:
+        return False
+    ensure_membership(user.id, org_id, MembershipRole.STUDENT.value, status=MembershipStatus.ACTIVE.value)
     existing_provider_student = ProviderStudent.query.filter_by(
         provider_id=provider_id,
         user_id=user.id,
@@ -288,6 +316,8 @@ class RegisterStudentByInvitation(Resource):
                 birth_date=birth_date_value,
             )
         )
+        platform_org = get_or_create_platform_organization()
+        ensure_membership(student.id, platform_org.id, MembershipRole.STUDENT.value, status=MembershipStatus.ACTIVE.value)
         try:
             _link_student_with_sender(invitation, student)
         except ValueError as err:
@@ -321,8 +351,7 @@ class AcceptInvitation(Resource):
         user = User.query.get(int(identity))
         if user is None:
             return {"message": "User not found."}, 404
-        role_names = [role.name for role in user.roles]
-        if "student" not in role_names:
+        if not user_has_any_legacy_role(user, "student"):
             return {"message": "Only student accounts can accept invitation links."}, 403
         try:
             is_linked = _link_student_with_sender(invitation, user)

@@ -44,7 +44,9 @@ upsert_parser.add_argument(
 
 def _forbidden_if_not_admin():
     claims = get_jwt() or {}
-    if claims.get("role") != "admin":
+    primary = (claims.get("role") or "").strip().lower()
+    extra = {str(r).strip().lower() for r in (claims.get("roles") or []) if isinstance(r, str)}
+    if primary not in ("admin", "super_admin") and not extra.intersection({"admin", "super_admin", "super admin"}):
         return ({"message": get_message("access_denied", get_current_lang())}, 403)
     return None
 

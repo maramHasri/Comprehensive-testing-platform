@@ -11,7 +11,9 @@ from flask_jwt_extended import create_access_token
 from app.extensions import db
 from app.models import Institution, User
 from app.repositories.auth_repository import create_session, delete_session_by_jti
-from app.repositories.user_repository import create_user, get_user_by_email, get_user_by_id, get_role_by_name, create_role
+from app.repositories.user_repository import create_user, get_user_by_email, get_user_by_id
+from app.utils.iam_helpers import build_user_jwt_claims, ensure_institution_organization, ensure_membership, user_is_super_admin
+from app.models.membership import MembershipRole, MembershipStatus
 from app.repositories.message_repository import get_message
 from app.services.email_template_service import send_activation_email
 from app.utils.email_verification_token import (
@@ -171,10 +173,6 @@ def register_institution(
     user.phone = phone.strip()
     user.country = country.strip()
     user.is_active = False
-    role_name = "institution"
-    role_model = get_role_by_name(role_name) or create_role(role_name)
-    if role_model not in user.roles:
-        user.roles.append(role_model)
     institution = Institution(
         name=name.strip(),
         type=type.strip(),
@@ -195,6 +193,14 @@ def register_institution(
     )
     institution.trust_level = _evaluate_institution_trust_level(institution)
     db.session.add(institution)
+    db.session.flush()
+    org_id = ensure_institution_organization(institution)
+    ensure_membership(
+        user.id,
+        org_id,
+        MembershipRole.ADMIN.value,
+        status=MembershipStatus.ACTIVE.value,
+    )
     db.session.commit()
     if not _send_activation_for_user(user):
         _auth_log.warning("[auth] institution registration created user_id=%s but activation email failed", user.id)
@@ -278,19 +284,17 @@ def login_super_admin(email: str, password: str, lang: str | None = None) -> tup
     user = User.query.filter_by(email=normalized_email).first()
     if user is None or not user.check_password(password):
         return {"message": get_message("AUTH_LOGIN_INVALID", lang)}, 401
-    role_names = [role.name for role in user.roles]
-    if "super_admin" not in role_names and "super admin" not in role_names:
+    if not user_is_super_admin(user):
         return {"message": get_message("AUTH_LOGIN_INVALID", lang)}, 401
     expires_delta = current_app.config.get("JWT_ACCESS_TOKEN_EXPIRES") or timedelta(days=7)
     expires_at = datetime.utcnow() + expires_delta
     jti = str(uuid.uuid4())
+    claims = build_user_jwt_claims(user)
+    claims["jti"] = jti
+    claims["role"] = "super_admin"
     access_token = create_access_token(
         identity=str(user.id),
-        additional_claims={
-            "role": "super_admin",
-            "roles": role_names,
-            "jti": jti,
-        },
+        additional_claims=claims,
         expires_delta=expires_delta,
     )
     create_session(user.id, jti, expires_at)
@@ -431,19 +435,23 @@ def set_institution_admin_approval(institution_id: int, admin_approval: bool) ->
 
 def get_all_users() -> tuple[list[dict], int]:
     users = User.query.order_by(User.created_at.desc()).all()
-    return [
-        {
-            "id": user.id,
-            "full_name": user.full_name,
-            "email": user.email,
-            "phone": user.phone,
-            "country": user.country,
-            "is_active": user.is_active,
-            "roles": [role.name for role in user.roles],
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-        }
-        for user in users
-    ], 200
+    result: list[dict] = []
+    for user in users:
+        claims = build_user_jwt_claims(user)
+        result.append(
+            {
+                "id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "phone": user.phone,
+                "country": user.country,
+                "is_active": user.is_active,
+                "roles": claims.get("roles", [role.name for role in user.roles]),
+                "memberships": claims.get("memberships", []),
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+            }
+        )
+    return result, 200
 
 
 def logout(jti: str, lang: str | None = None) -> tuple[dict, int]:

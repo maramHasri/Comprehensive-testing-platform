@@ -55,6 +55,7 @@ class Provider(db.Model):
         cascade="all, delete-orphan",
     )
     exams = db.relationship("Exam", back_populates="provider", lazy=True, cascade="all, delete-orphan")
+    organization = db.relationship("Organization", back_populates="provider", uselist=False)
 
 
 class ProviderUser(db.Model):

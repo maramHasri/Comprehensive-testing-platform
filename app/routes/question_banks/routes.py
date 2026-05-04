@@ -59,6 +59,16 @@ def _current_user_id():
         return None
 
 
+def _claims_allow_bank_admin(claims: dict) -> bool:
+    primary = (claims.get("role") or "").strip().lower()
+    if primary in ("admin", "super_admin"):
+        return True
+    for r in claims.get("roles") or []:
+        if isinstance(r, str) and r.strip().lower() in ("admin", "super_admin", "super admin"):
+            return True
+    return False
+
+
 def _can_view_bank(bank, current_user_id):
     if bank.access_type == ACCESS_PUBLIC or bank.access_type == ACCESS_PROTECTED:
         return True
@@ -1123,7 +1133,7 @@ class QuestionBankVersions(Resource):
             return {"message": "Question bank not found."}, 404
         current_user_id = _current_user_id()
         claims = get_jwt() or {}
-        if current_user_id != bank.owner_id and claims.get("role") != "admin":
+        if current_user_id != bank.owner_id and not _claims_allow_bank_admin(claims):
             return {"message": "Only owner/admin can view all versions."}, 403
         versions = get_versions_by_bank(bank_id)
         return [
@@ -1149,7 +1159,7 @@ class QuestionBankVersions(Resource):
         if current_user_id is None:
             return {"message": "Authentication required."}, 401
         claims = get_jwt() or {}
-        if current_user_id != bank.owner_id and claims.get("role") != "admin":
+        if current_user_id != bank.owner_id and not _claims_allow_bank_admin(claims):
             return {"message": "Only owner/admin can publish a new version."}, 403
         merged = _merge_version_create_inputs()
         update_type = merged.get("update_type")

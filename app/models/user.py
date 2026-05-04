@@ -2,6 +2,7 @@ from app.extensions import db
 from datetime import datetime
 from flask_bcrypt import generate_password_hash, check_password_hash
 
+
 class User(db.Model):
     __tablename__ = "users"
 
@@ -15,61 +16,46 @@ class User(db.Model):
     two_factor_enabled = db.Column(db.Boolean, nullable=False, default=False)
     two_factor_secret = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-  
-    # Relationships
+
     roles = db.relationship("Role", secondary="user_roles", back_populates="users", lazy="selectin")
-    provider_memberships = db.relationship(
-        "ProviderUser",
+    memberships = db.relationship(
+        "Membership",
         back_populates="user",
-        lazy=True,
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
+    provider_memberships = db.relationship("ProviderUser", back_populates="user", lazy="selectin")
+
+    # Profiles
     student_profile = db.relationship(
         "StudentProfile",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
     )
+
     provider_profile = db.relationship(
         "ProviderProfile",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
     )
-    institution_memberships = db.relationship(
-        "InstitutionUser",
-        back_populates="user",
-        lazy=True,
-        cascade="all, delete-orphan",
-    )
-    institutions = db.relationship("Institution", secondary="institution_users", viewonly=True, lazy="selectin")
+
+    # Core relations
     exam_sessions = db.relationship("ExamSession", back_populates="user", lazy=True)
     quizzes = db.relationship("Quiz", backref="creator", lazy=True)
     question_banks = db.relationship("QuestionBank", backref="owner", lazy=True)
     attempts = db.relationship("QuizAttempt", backref="student", lazy=True)
     purchases = db.relationship("Purchase", backref="user", lazy=True, cascade="all, delete-orphan")
 
+    # Auth
     def set_password(self, password):
         self.password_hash = generate_password_hash(password).decode("utf-8")
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    @property
-    def role(self):
-        role_names = [role.name for role in self.roles]
-        if "super admin" in role_names:
-            return "super admin"
-        if "super_admin" in role_names:
-            return "super_admin"
-        if "provider" in role_names:
-            return "provider"
-        if "student" in role_names:
-            return "student"
-        if "exam provider" in role_names:
-            return "exam provider"
-        return role_names[0] if role_names else None
-
+    # Aliases
     @property
     def name(self):
         return self.full_name
@@ -79,6 +65,12 @@ class User(db.Model):
         self.full_name = value
 
     @property
+    def role(self) -> str:
+        from app.utils.iam_helpers import infer_primary_legacy_role
+
+        return infer_primary_legacy_role(self)
+
+    @property
     def is_verified(self):
         return self.is_active
 
@@ -86,8 +78,7 @@ class User(db.Model):
     def is_verified(self, value):
         self.is_active = bool(value)
 
-    # TODO: Move purchase/upgrade rules to services/bank_service.py.
-    # Model should stay focused on persistence and simple helpers.
+    # Business helpers
     def has_purchased(self, bank):
         from app.models.question_bank import Purchase
 
