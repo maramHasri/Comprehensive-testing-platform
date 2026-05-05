@@ -17,25 +17,16 @@ class User(db.Model):
     two_factor_secret = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    roles = db.relationship("Role", secondary="user_roles", back_populates="users", lazy="selectin")
     memberships = db.relationship(
         "Membership",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    provider_memberships = db.relationship("ProviderUser", back_populates="user", lazy="selectin")
 
     # Profiles
     student_profile = db.relationship(
         "StudentProfile",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
-
-    provider_profile = db.relationship(
-        "ProviderProfile",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
@@ -66,9 +57,9 @@ class User(db.Model):
 
     @property
     def role(self) -> str:
-        from app.utils.iam_helpers import infer_primary_legacy_role
+        from app.utils.iam_helpers import infer_primary_role
 
-        return infer_primary_legacy_role(self)
+        return infer_primary_role(self)
 
     @property
     def is_verified(self):

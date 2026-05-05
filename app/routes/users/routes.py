@@ -5,7 +5,12 @@ from flask_restx import Namespace, Resource, reqparse
 from app.extensions import db
 from app.models import Provider
 
-exam_providers_ns = Namespace("Exam Providers", description="Individual exam provider trust and verification")
+independent_teachers_ns = Namespace(
+    "Independent Teachers",
+    description="Individual independent-teacher trust and verification",
+)
+# Backward-compatible alias while route modules are being renamed.
+exam_providers_ns = independent_teachers_ns
 
 provider_profile_parser = reqparse.RequestParser()
 provider_profile_parser.add_argument("full_name", type=str, required=False, location=("json", "form"))

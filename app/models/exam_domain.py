@@ -16,13 +16,13 @@ class Exam(db.Model):
     __tablename__ = "exams"
 
     id = db.Column(db.Integer, primary_key=True)
-    provider_id = db.Column(db.Integer, db.ForeignKey("providers.id", ondelete="CASCADE"), nullable=False)
+    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     duration = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
-    provider = db.relationship("Provider", back_populates="exams")
+    organization = db.relationship("Organization", backref="exams")
     sessions = db.relationship("ExamSession", back_populates="exam", lazy=True, cascade="all, delete-orphan")
 
 

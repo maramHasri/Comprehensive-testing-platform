@@ -24,9 +24,9 @@ from app.models.organization import OrganizationKind
 from app.utils.iam_helpers import (
     ensure_institution_organization,
     ensure_membership,
-    ensure_provider_organization,
+    ensure_independent_teacher_organization,
     get_or_create_platform_organization,
-    user_has_any_legacy_role,
+    user_has_any_role,
 )
 from app.services.email_template_service import send_activation_email
 from app.utils.email_verification_token import generate_email_verification_token
@@ -189,7 +189,7 @@ def _link_student_with_sender(invitation: Invitation, user: User) -> bool:
     provider = Provider.query.get(provider_id)
     if provider is None:
         raise ValueError("Provider sender is invalid.")
-    org_id = ensure_provider_organization(provider)
+    org_id = ensure_independent_teacher_organization(provider)
     existing_m = Membership.query.filter_by(user_id=user.id, organization_id=org_id).first()
     if existing_m is not None:
         return False
@@ -351,7 +351,7 @@ class AcceptInvitation(Resource):
         user = User.query.get(int(identity))
         if user is None:
             return {"message": "User not found."}, 404
-        if not user_has_any_legacy_role(user, "student"):
+        if not user_has_any_role(user, "student"):
             return {"message": "Only student accounts can accept invitation links."}, 403
         try:
             is_linked = _link_student_with_sender(invitation, user)
@@ -362,3 +362,4 @@ class AcceptInvitation(Resource):
         invitation.used_count += 1
         db.session.commit()
         return {"message": "Invitation accepted and student linked successfully."}, 200
+

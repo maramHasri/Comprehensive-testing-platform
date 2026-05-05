@@ -1,6 +1,7 @@
 from typing import Any
 
 from flask_restx import Namespace, Resource, reqparse
+from flask_bcrypt import generate_password_hash
 
 from app.extensions import db
 from app.models import Institution
@@ -83,6 +84,8 @@ class EducationalInstitutionProfile(Resource):
             field_value = payload.get(field_name)
             if field_value is None:
                 continue
+            if field_name == "password":
+                field_value = generate_password_hash(str(field_value)).decode("utf-8")
             setattr(institution, field_name, field_value)
         institution.trust_level = evaluate_institution_trust_level(institution)
         db.session.commit()

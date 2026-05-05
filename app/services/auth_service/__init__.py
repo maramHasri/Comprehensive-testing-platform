@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timedelta
 from enum import Enum
 from urllib.parse import quote
+from flask_bcrypt import check_password_hash, generate_password_hash
 
 from flask import current_app
 from flask_jwt_extended import create_access_token
@@ -51,6 +52,25 @@ class ActivationLinkOutcome(str, Enum):
     EXPIRED = "expired"
     MISSING_TOKEN = "missing_token"
     USER_MISSING = "user_missing"
+
+
+def _hash_password(plain_password: str) -> str:
+    return generate_password_hash(plain_password).decode("utf-8")
+
+
+def _is_bcrypt_hash(value: str | None) -> bool:
+    if not value:
+        return False
+    return value.startswith("$2a$") or value.startswith("$2b$") or value.startswith("$2y$")
+
+
+def _verify_institution_password(stored_password: str | None, candidate_password: str) -> bool:
+    stored = (stored_password or "").strip()
+    if not stored:
+        return False
+    if not _is_bcrypt_hash(stored):
+        return False
+    return check_password_hash(stored, candidate_password)
 
 
 def _build_activation_url(token: str) -> str:
@@ -179,7 +199,7 @@ def register_institution(
         country=country.strip(),
         city=city.strip(),
         email=email.strip().lower(),
-        password=password,
+        password=_hash_password(password),
         phone=phone.strip(),
         responsible_person_name=responsible_person_name.strip(),
         short_description=short_description.strip(),
@@ -254,20 +274,24 @@ def login_institution(email: str, password: str, lang: str | None = None) -> tup
     if not (password or ""):
         return {"message": get_message("AUTH_PASSWORD_REQUIRED", lang)}, 400
     institution = Institution.query.get(email.strip().lower())
-    if institution is None or institution.password != password:
+    if institution is None or not _verify_institution_password(institution.password, password):
         return {"message": get_message("AUTH_LOGIN_INVALID", lang)}, 401
     user = get_user_by_email(email.strip())
     if user is None or not user.is_active:
         return {"message": get_message("AUTH_VERIFY_REQUIRED", lang)}, 403
     expires_delta = current_app.config.get("JWT_ACCESS_TOKEN_EXPIRES") or timedelta(days=7)
+    expires_at = datetime.utcnow() + expires_delta
+    jti = str(uuid.uuid4())
+    claims = build_user_jwt_claims(user)
+    claims["jti"] = jti
+    claims["role"] = "institution"
+    claims["trust_level"] = institution.trust_level
     access_token = create_access_token(
-        identity=institution.email,
-        additional_claims={
-            "role": "institution",
-            "trust_level": institution.trust_level,
-        },
+        identity=str(user.id),
+        additional_claims=claims,
         expires_delta=expires_delta,
     )
+    create_session(user.id, jti, expires_at)
     return {"token": access_token}, 200
 
 
@@ -339,7 +363,7 @@ def update_institution_profile(
     if city is not None:
         institution.city = city.strip()
     if password is not None:
-        institution.password = password
+        institution.password = _hash_password(password)
     if phone is not None:
         institution.phone = phone.strip()
     if responsible_person_name is not None:

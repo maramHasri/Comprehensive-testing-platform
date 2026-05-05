@@ -21,7 +21,7 @@ from app.services.quiz_service import (
 )
 from app.utils.localization import get_current_lang
 from app.utils.request_validation import trim_str
-from app.utils.iam_helpers import user_has_any_legacy_role
+from app.utils.iam_helpers import user_has_any_role
 
 
 def jwt_allows_exam_provider(jwt_data: dict) -> bool:
@@ -144,7 +144,7 @@ class CreateQuizFromBank(Resource):
         except (ValueError, TypeError):
             return {"message": get_message("COMMON_INVALID_TOKEN", lang)}, 401
         creator = get_user_by_id(user_id)
-        if not creator or not user_has_any_legacy_role(creator, "provider", "exam provider", "instructor"):
+        if not creator or not user_has_any_role(creator, "provider", "exam provider", "instructor"):
             return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
 
         args = from_bank_parser.parse_args()
@@ -189,7 +189,7 @@ class QuizCreate(Resource):
             except (ValueError, TypeError):
                 return {"message": get_message("COMMON_INVALID_TOKEN", lang)}, 401
             creator = get_user_by_id(user_id)
-            if not creator or not user_has_any_legacy_role(creator, "provider", "exam provider", "instructor"):
+            if not creator or not user_has_any_role(creator, "provider", "exam provider", "instructor"):
                 return {"message": get_message("QUIZ_TEACHERS_ONLY", lang)}, 403
             args = quiz_create_parser.parse_args()
             total_score = int(args.get("total_score") or 0)

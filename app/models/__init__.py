@@ -7,19 +7,9 @@ from .quiz import Quiz, QuizQuestion
 from .quiz_attempt import QuizAttempt
 from .question_attempt import QuestionAttempt
 from .role import Role
-from .user_role import UserRole
 from .membership import Membership, MembershipRole, MembershipStatus
-from .organization import Institution, Organization, OrganizationKind
-from .provider_profile import ProviderProfile
+from .organization import Institution, Organization
+from .country import Country, Region
 from .student_profile import StudentProfile
 from .invitation import Invitation
-from .provider_student import ProviderStudent
-from .provider import (
-    Provider,
-    ProviderUser,
-    ProviderType,
-    ProviderMembershipRole,
-    IndividualProfile,
-    OrganizationProfile,
-)
 from .exam_domain import Exam, ExamSession, ExamSessionLog, ExamSessionStatus

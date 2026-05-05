@@ -7,10 +7,9 @@ from flask_restx import Api
 
 from app.routes.auth.routes import auth_ns
 from app.routes.users import users_ns
-from app.routes.exam_providers.routes import exam_providers_ns
 from app.routes.super_admin.routes import super_admin_ns
-from app.routes.invitations.routes import invitations_ns
 from app.routes.exams.routes import exams_ns
+from app.routes.countries import countries_ns
 from app.routes.sessions.routes import sessions_ns
 from app.routes.question_banks.routes import question_bank_ns
 from app.routes.quizzes.routes import quiz_ns
@@ -42,9 +41,8 @@ api = Api(
 api.add_namespace(auth_ns, path="/auth")
 api.add_namespace(users_ns, path="/api/users")
 api.add_namespace(super_admin_ns, path="/super-admin")
-api.add_namespace(exam_providers_ns, path="/exam-providers")
-api.add_namespace(invitations_ns, path="/api")
 api.add_namespace(exams_ns, path="/exams")
+api.add_namespace(countries_ns, path="/api")
 api.add_namespace(sessions_ns, path="/sessions")
 api.add_namespace(question_bank_ns, path="/api/question-banks")
 api.add_namespace(quiz_ns, path="/api/quizzes")

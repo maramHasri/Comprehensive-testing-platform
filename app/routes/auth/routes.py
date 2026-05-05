@@ -12,10 +12,8 @@ from werkzeug.utils import secure_filename
 import os
 import uuid
 
-from app.extensions import db
-from app.models import User, Role
+from app.models import User
 from app.utils.localization import get_current_lang
-from app.utils.rbac import roles_required
 from app.routes.auth.service import build_email_verification_page
 from app.services.auth_service import (
     register_institution as register_institution_svc,
@@ -244,5 +242,64 @@ class ResendVerification(Resource):
         parsed = resend_parser.parse_args()
         email = _email_from_request(parsed.get("email"))
         result, status = resend_verification_svc(email=email, lang=get_current_lang())
+        return result, status
+
+
+def _token_from_request(parsed_token: str | None = None) -> str | None:
+    body = request.get_json(silent=True) or {}
+    raw = (
+        request.args.get("token")
+        or body.get("token")
+        or request.form.get("token")
+        or parsed_token
+    )
+    return _str_or_none(raw)
+
+
+verify_parser = reqparse.RequestParser()
+verify_parser.add_argument(
+    "token",
+    type=str,
+    required=False,
+    location=("args", "json", "form"),
+    help="Email verification token",
+)
+
+
+@auth_ns.route("/verify/<path:token>")
+class VerifyEmailTokenPage(Resource):
+    @auth_ns.doc(
+        "verify_email_token_page",
+        description="Browser-friendly activation link endpoint that returns HTML.",
+    )
+    def get(self, token: str):
+        page = build_email_verification_page(token=token)
+        response = make_response(page.html, page.status_code)
+        response.headers["Content-Type"] = "text/html; charset=utf-8"
+        return response
+
+
+@auth_ns.route("/verify")
+class VerifyEmailToken(Resource):
+    @auth_ns.doc(
+        "verify_email_token",
+        description="Verify email token (query/body token).",
+    )
+    @auth_ns.expect(verify_parser)
+    @auth_ns.response(200, "Email verified or already verified")
+    @auth_ns.response(400, "Invalid, expired, or missing token")
+    def get(self):
+        args = verify_parser.parse_args()
+        token = _token_from_request(args.get("token"))
+        result, status = verify_email_token_svc(token=token or "", lang=get_current_lang())
+        return result, status
+
+    @auth_ns.expect(verify_parser)
+    @auth_ns.response(200, "Email verified or already verified")
+    @auth_ns.response(400, "Invalid, expired, or missing token")
+    def post(self):
+        args = verify_parser.parse_args()
+        token = _token_from_request(args.get("token"))
+        result, status = verify_email_token_svc(token=token or "", lang=get_current_lang())
         return result, status
 

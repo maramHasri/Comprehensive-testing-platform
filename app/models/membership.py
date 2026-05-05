@@ -17,17 +17,37 @@ class MembershipStatus(str, Enum):
 
 
 class Membership(db.Model):
-    """Binds a user to an organization with a contextual role (replaces a single global user role)."""
-
     __tablename__ = "memberships"
-    __table_args__ = (db.UniqueConstraint("user_id", "organization_id", name="uq_memberships_user_organization"),)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "organization_id", name="uq_memberships_user_organization"),
+        db.Index("idx_user_org", "user_id", "organization_id"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    organization_id = db.Column(db.Integer, db.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    organization_id = db.Column(
+        db.Integer,
+        db.ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
     role = db.Column(db.String(20), nullable=False)
     status = db.Column(db.String(20), nullable=False, default=MembershipStatus.ACTIVE.value)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow
+    )
 
     user = db.relationship("User", back_populates="memberships")
     organization = db.relationship("Organization", back_populates="memberships")

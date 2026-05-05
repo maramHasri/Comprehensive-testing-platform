@@ -1,1 +1,1 @@
-from .routes import exam_providers_ns
+from .routes import independent_teachers_ns, exam_providers_ns

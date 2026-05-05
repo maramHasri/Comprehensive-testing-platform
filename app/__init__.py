@@ -6,7 +6,6 @@ from jwt.exceptions import InvalidSubjectError, ExpiredSignatureError
 from app.extensions import db, migrate, jwt
 from app.config import Config
 from app.routes import api
-from app.services.auth_service.roles import ensure_default_roles
 
 def test_connection() -> None:
     smtp_host: str = "smtp.gmail.com"
@@ -106,12 +105,6 @@ def create_app():
 
     # Swagger / API (namespaces registered in app.routes)
     api.init_app(app)
-    with app.app_context():
-        try:
-            ensure_default_roles()
-        except Exception:
-            # During transitional migrations, role seeding can fail before schema is aligned.
-            pass
 
     # Register JWT error handlers with Flask-RESTx API
     @api.errorhandler(NoAuthorizationError)

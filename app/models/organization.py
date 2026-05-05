@@ -1,30 +1,20 @@
-"""
-Organization model: canonical RBAC scope (used by Membership).
-
-Educational organizations in product language are stored as `Institution` profile rows
-(table `institutions`) and linked 1:1 from `Organization` when kind is "institution".
-Do not use a separate join table for user–org role; use Membership only.
-"""
-
 from datetime import datetime
 from enum import Enum
 
-from app.extensions import db
 from sqlalchemy import text
+
+from app.extensions import db
 
 
 class OrganizationKind(str, Enum):
-    PLATFORM = "platform"
     INSTITUTION = "institution"
-    PROVIDER = "provider"
+    INDEPENDENT_TEACHER = "independent_teacher"
+    PLATFORM = "platform"
+
+
 
 
 class Institution(db.Model):
-    """
-    Profile and credentials for an educational organization (table `institutions`).
-    The RBAC identity for members is `Organization` with `institution_id` set, not this row alone.
-    """
-
     __tablename__ = "institutions"
 
     id = db.Column(
@@ -56,27 +46,19 @@ class Institution(db.Model):
     trust_level = db.Column(db.String(20), nullable=False, default="BASIC")
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
-    organization = db.relationship(
-        "Organization",
-        back_populates="institution",
-        uselist=False,
-    )
+    organization = db.relationship("Organization", back_populates="institution", uselist=False)
 
 
 class Organization(db.Model):
-    """Single scope entity for CRBAC: users relate via Membership (user + organization + role)."""
-
     __tablename__ = "organizations"
 
     id = db.Column(db.Integer, primary_key=True)
     kind = db.Column(db.String(30), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
     institution_id = db.Column(db.Integer, db.ForeignKey("institutions.id", ondelete="CASCADE"), unique=True, nullable=True)
-    provider_id = db.Column(db.Integer, db.ForeignKey("providers.id", ondelete="CASCADE"), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     institution = db.relationship("Institution", back_populates="organization", foreign_keys=[institution_id])
-    provider = db.relationship("Provider", back_populates="organization", foreign_keys=[provider_id])
     memberships = db.relationship(
         "Membership",
         back_populates="organization",
