@@ -6,7 +6,6 @@ from .question import Question, Choice, BankQuestion, QuestionAttribution
 from .quiz import Quiz, QuizQuestion
 from .quiz_attempt import QuizAttempt
 from .question_attempt import QuestionAttempt
-from .role import Role
 from .membership import Membership, MembershipRole, MembershipStatus
 from .organization import Institution, Organization
 from .country import Country, Region
