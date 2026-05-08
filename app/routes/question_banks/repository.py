@@ -1,6 +1,5 @@
 from app.extensions import db
 from app.models import QuestionBank, Question, Choice, BankQuestion, QuestionAttribution
-from app.repositories.bank_version_repository import get_latest_version
 
 
 def get_bank_by_id(bank_id: int) -> QuestionBank | None:
@@ -19,13 +18,10 @@ def create_question(
     level_id: int | None = None,
     repeated_level_id: int | None = None,
 ) -> Question:
-    latest_version = get_latest_version(bank_id)
     question = Question(
         bank_id=bank_id,
         topic_id=topic_id,
         level_id=level_id,
-        repeated_level_id=repeated_level_id,
-        bank_version_id=latest_version.id if latest_version else None,
         type=qtype,
         content=text,
         points=points,

@@ -13,7 +13,6 @@ import logging
 
 from app.extensions import db
 from app.models import Quiz, Question
-from app.repositories.message_repository import get_message
 from app.repositories.user_repository import get_user_by_id
 from app.services.quiz_service import (
     recalculate_question_scores,

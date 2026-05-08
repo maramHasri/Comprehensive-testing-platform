@@ -98,7 +98,7 @@ def upgrade() -> None:
                 CASE LOWER(TRIM(iu.role))
                     WHEN 'instructor' THEN 'teacher'
                     WHEN 'supervisor' THEN 'teacher'
-                    WHEN 'observer' THEN 'examiner'
+                    WHEN 'observer' THEN 'institution_manager'
                     ELSE LOWER(TRIM(iu.role))
                 END,
                 'active',
@@ -120,7 +120,7 @@ def upgrade() -> None:
                 CASE LOWER(TRIM(pu.role))
                     WHEN 'instructor' THEN 'teacher'
                     WHEN 'supervisor' THEN 'teacher'
-                    WHEN 'observer' THEN 'examiner'
+                    WHEN 'observer' THEN 'institution_manager'
                     WHEN 'admin' THEN 'admin'
                     ELSE 'teacher'
                 END,

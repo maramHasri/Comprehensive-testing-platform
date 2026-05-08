@@ -5,8 +5,6 @@ create quiz from question bank.
 from app.extensions import db
 from app.models import Quiz, Question, QuestionBank, Choice, QuestionAttribution
 from app.models.question_bank import ACCESS_PUBLIC, ACCESS_PROTECTED, ACCESS_PRIVATE
-from app.repositories.question_repository import get_questions_by_version
-from app.services.question_bank.bank_access_service import get_user_accessible_version
 
 
 def recalculate_question_scores(quiz: Quiz) -> None:

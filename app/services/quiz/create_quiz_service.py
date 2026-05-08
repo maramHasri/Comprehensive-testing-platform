@@ -2,7 +2,7 @@
 Quiz creation from bank — API layer with localized messages (message_key + lang).
 Calls core domain logic in app.services.quiz_service (shim to quiz.quiz_service).
 """
-from app.repositories.message_repository import get_message, get_message_format
+from app.localization.message_service import get_message, get_message_format
 from app.services.quiz.quiz_service import create_quiz_from_bank as _create_quiz_from_bank_core
 from app.utils.localization import get_current_lang
 

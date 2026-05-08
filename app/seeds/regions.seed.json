@@ -1,0 +1,262 @@
+{
+    "regions": [
+      {
+        "country_id": 230,
+        "country": "United States",
+        "regions": [
+          "California",
+          "Texas",
+          "Florida",
+          "New York",
+          "Illinois",
+          "Pennsylvania",
+          "Ohio",
+          "Georgia",
+          "North Carolina",
+          "Washington"
+        ]
+      },
+      {
+        "country_id": 39,
+        "country": "Canada",
+        "regions": [
+          "Ontario",
+          "Quebec",
+          "British Columbia",
+          "Alberta",
+          "Manitoba",
+          "Saskatchewan",
+          "Nova Scotia",
+          "New Brunswick"
+        ]
+      },
+      {
+        "country_id": 229,
+        "country": "United Kingdom",
+        "regions": [
+          "England",
+          "Scotland",
+          "Wales",
+          "Northern Ireland"
+        ]
+      },
+      {
+        "country_id": 81,
+        "country": "Germany",
+        "regions": [
+          "Bavaria",
+          "Berlin",
+          "Hamburg",
+          "North Rhine-Westphalia",
+          "Baden-Württemberg",
+          "Hesse",
+          "Saxony"
+        ]
+      },
+      {
+        "country_id": 74,
+        "country": "France",
+        "regions": [
+          "Île-de-France",
+          "Provence-Alpes-Côte d'Azur",
+          "Auvergne-Rhône-Alpes",
+          "Nouvelle-Aquitaine",
+          "Occitanie"
+        ]
+      },
+      {
+        "country_id": 108,
+        "country": "Italy",
+        "regions": [
+          "Lombardy",
+          "Lazio",
+          "Tuscany",
+          "Sicily",
+          "Veneto",
+          "Piedmont"
+        ]
+      },
+      {
+        "country_id": 203,
+        "country": "Spain",
+        "regions": [
+          "Madrid",
+          "Catalonia",
+          "Andalusia",
+          "Valencia",
+          "Galicia",
+          "Basque Country"
+        ]
+      },
+      {
+        "country_id": 154,
+        "country": "Netherlands",
+        "regions": [
+          "North Holland",
+          "South Holland",
+          "Utrecht",
+          "Gelderland",
+          "North Brabant",
+          "Limburg"
+        ]
+      },
+      {
+        "country_id": 191,
+        "country": "Saudi Arabia",
+        "regions": [
+          "Riyadh",
+          "Makkah",
+          "Madinah",
+          "Eastern Province",
+          "Asir",
+          "Tabuk"
+        ]
+      },
+      {
+        "country_id": 228,
+        "country": "United Arab Emirates",
+        "regions": [
+          "Abu Dhabi",
+          "Dubai",
+          "Sharjah",
+          "Ajman",
+          "Fujairah",
+          "Ras Al Khaimah",
+          "Umm Al Quwain"
+        ]
+      },
+      {
+        "country_id": 64,
+        "country": "Egypt",
+        "regions": [
+          "Cairo",
+          "Alexandria",
+          "Giza",
+          "Dakahlia",
+          "Red Sea",
+          "Aswan",
+          "Luxor"
+        ]
+      },
+      {
+        "country_id": 101,
+        "country": "India",
+        "regions": [
+          "Maharashtra",
+          "Karnataka",
+          "Tamil Nadu",
+          "Delhi",
+          "Uttar Pradesh",
+          "Gujarat",
+          "West Bengal"
+        ]
+      },
+      {
+        "country_id": 45,
+        "country": "China",
+        "regions": [
+          "Beijing",
+          "Shanghai",
+          "Guangdong",
+          "Zhejiang",
+          "Sichuan",
+          "Shandong",
+          "Henan"
+        ]
+      },
+      {
+        "country_id": 110,
+        "country": "Japan",
+        "regions": [
+          "Tokyo",
+          "Osaka",
+          "Kyoto",
+          "Hokkaido",
+          "Aichi",
+          "Fukuoka"
+        ]
+      },
+      {
+        "country_id": 31,
+        "country": "Brazil",
+        "regions": [
+          "São Paulo",
+          "Rio de Janeiro",
+          "Bahia",
+          "Minas Gerais",
+          "Paraná",
+          "Rio Grande do Sul"
+        ]
+      },
+      {
+        "country_id": 142,
+        "country": "Mexico",
+        "regions": [
+          "Mexico City",
+          "Jalisco",
+          "Nuevo León",
+          "Puebla",
+          "Chiapas",
+          "Guanajuato"
+        ]
+      },
+      {
+        "country_id": 14,
+        "country": "Australia",
+        "regions": [
+          "New South Wales",
+          "Victoria",
+          "Queensland",
+          "Western Australia",
+          "South Australia",
+          "Tasmania"
+        ]
+      },
+      {
+        "country_id": 222,
+        "country": "Turkey",
+        "regions": [
+          "Istanbul",
+          "Ankara",
+          "Izmir",
+          "Antalya",
+          "Bursa",
+          "Konya"
+        ]
+      },
+      {
+        "country_id": 166,
+        "country": "Pakistan",
+        "regions": [
+          "Punjab",
+          "Sindh",
+          "Khyber Pakhtunkhwa",
+          "Balochistan",
+          "Islamabad Capital Territory"
+        ]
+      },
+      {
+        "country_id": 201,
+        "country": "South Africa",
+        "regions": [
+          "Gauteng",
+          "Western Cape",
+          "KwaZulu-Natal",
+          "Eastern Cape",
+          "Free State",
+          "Limpopo"
+        ]
+      },
+      {
+        "country_id": 227,
+        "country": "Ukraine",
+        "regions": [
+          "Kyiv Oblast",
+          "Lviv Oblast",
+          "Kharkiv Oblast",
+          "Odesa Oblast",
+          "Dnipropetrovsk Oblast"
+        ]
+      }
+    ]
+  }

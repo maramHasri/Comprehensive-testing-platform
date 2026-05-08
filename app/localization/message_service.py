@@ -103,7 +103,7 @@ def get_message_format(message_key: str, language: str, **kwargs: Any) -> str:
         return text
 
 
-def upsert_app_message_row(message_key: str, language: str, message_text: str) -> AppMessage:
+def ensure_app_message_row(message_key: str, language: str, message_text: str) -> AppMessage:
     """
     Insert or update one row (used by seed script and admin API).
     Caller should commit session and call clear_message_cache(message_key).

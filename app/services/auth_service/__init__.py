@@ -15,7 +15,6 @@ from app.repositories.auth_repository import create_session, delete_session_by_j
 from app.repositories.user_repository import create_user, get_user_by_email, get_user_by_id
 from app.utils.iam_helpers import build_user_jwt_claims, ensure_institution_organization, ensure_membership, user_is_super_admin
 from app.models.membership import MembershipRole, MembershipStatus
-from app.repositories.message_repository import get_message
 from app.services.email_template_service import send_activation_email
 from app.utils.email_verification_token import (
     decode_email_verification_token,

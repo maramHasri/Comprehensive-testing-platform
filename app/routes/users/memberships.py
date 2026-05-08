@@ -20,7 +20,7 @@ membership_item_model = users_ns.model(
         "role": fields.String(
             required=True,
             description="Contextual role in this organization",
-            enum=["student", "teacher", "admin", "examiner"],
+            enum=["student", "teacher", "admin", "institution_manager"],
         ),
         "status": fields.String(
             required=True,

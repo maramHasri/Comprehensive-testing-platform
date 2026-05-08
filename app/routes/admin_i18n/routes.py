@@ -6,11 +6,7 @@ from flask_restx import Namespace, Resource, reqparse
 from flask_jwt_extended import get_jwt, jwt_required
 
 from app.extensions import db
-from app.repositories.message_repository import (
-    clear_message_cache,
-    get_message,
-    upsert_app_message_row,
-)
+
 from app.utils.localization import get_current_lang
 
 admin_i18n_ns = Namespace(

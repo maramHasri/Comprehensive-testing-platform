@@ -22,14 +22,14 @@ def main() -> int:
     from app import create_app
     from app.extensions import db
     from app.localization.catalog import MESSAGE_CATALOG
-    from app.repositories.message_repository import clear_message_cache, upsert_app_message_row
+    from app.localization.message_service import clear_message_cache, ensure_app_message_row
 
     app = create_app()
     with app.app_context():
         total = 0
         for message_key, translations in MESSAGE_CATALOG.items():
             for language_code, message_text in translations.items():
-                upsert_app_message_row(message_key, language_code, message_text)
+                ensure_app_message_row(message_key, language_code, message_text)
                 total += 1
         db.session.commit()
         clear_message_cache()

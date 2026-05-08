@@ -7,8 +7,6 @@ from app.routes.question_banks.repository import (
     create_question,
     replace_question_answers,
 )
-from app.repositories.bank_version_repository import get_latest_version
-from app.services.question_bank.bank_version_service import create_new_version
 
 
 class ValidationError(Exception):
@@ -215,14 +213,10 @@ def create_question_with_answers(
     if "repeated_level_id" in data:
         repeated_level_id = resolve_repeated_level_id_for_bank(bank.id, data["repeated_level_id"])
 
+    # ... الكود السابق كما هو حتى السطر 217
+    
     try:
-        latest_version = get_latest_version(bank.id)
-        if latest_version is None:
-            create_new_version(
-                bank_id=bank.id,
-                price=float(getattr(bank, "base_price", 0.0) or 0.0),
-                update_type="major" if getattr(bank, "is_paid", False) else "minor",
-            )
+    
         question = create_question(
             bank_id=bank.id,
             text=text,
@@ -233,15 +227,16 @@ def create_question_with_answers(
             base_time=base_time,
             topic_id=topic_id,
             level_id=level_id,
-            repeated_level_id=repeated_level_id,
         )
+        
         if answers:
             replace_question_answers(question, answers)
+            
         db.session.commit()
         db.session.refresh(question)
+        
     except Exception:
         db.session.rollback()
         raise
 
     return _question_to_dict(question)
-

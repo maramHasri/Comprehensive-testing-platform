@@ -25,7 +25,7 @@ After seeding, restart the app if you rely on long-lived workers (cache is clear
 |------|------|
 | `app/localization/catalog.py` | All predefined keys + `en` / `ar` strings |
 | `scripts/seed_app_messages.py` | CLI that upserts catalog into the DB |
-| `app/repositories/message_repository.py` | `get_message`, `get_message_format`, cache, `clear_message_cache`, `upsert_app_message_row` |
+| `app/repositories/message_repository.py` | `get_message`, `get_message_format`, cache, `clear_message_cache`, `ensure_app_message_row` |
 | `app/utils/localization.py` | `get_current_lang`, delegates to `get_message` |
 
 ## Add new messages later
@@ -40,7 +40,7 @@ Optional: use **POST** `/api/admin/messages` (JWT, **admin** role) with `message
 
 ```python
 from app.utils.localization import get_current_lang
-from app.repositories.message_repository import get_message, get_message_format
+from app.localization.message_service import get_message, get_message_format
 
 def get(self):
     lang = get_current_lang()

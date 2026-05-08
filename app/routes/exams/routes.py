@@ -27,7 +27,7 @@ class ExamCollection(Resource):
         user = User.query.get(int(identity))
         if user is None:
             return {"message": "User not found."}, 404
-        if not user_has_any_role(user, MembershipRole.ADMIN.value, MembershipRole.TEACHER.value):
+        if not user_has_any_role(user, MembershipRole.SUPER_ADMIN.value, MembershipRole.TEACHER.value):
             return {"message": "Only organization admins/teachers can create exams."}, 403
         organization = Organization.query.get(payload.get("organization_id"))
         if organization is None:

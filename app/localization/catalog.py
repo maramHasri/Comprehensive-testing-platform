@@ -3,7 +3,7 @@ Central catalog of localized message keys and their translations.
 
 Used by:
   - scripts/seed_app_messages.py — bulk insert / upsert into app_messages
-  - app.repositories.message_repository — English fallback when DB row is missing
+  - app.localization.message_service.py — English fallback when DB row is missing
 
 To add a new message:
   1. Add an entry here with "en" and "ar" (or more languages later).

@@ -6,7 +6,7 @@ No business logic, no DB queries. All user-facing messages come from service (DB
 # TODO: Ensure all input validation rules remain in services/auth_service.py.
 from flask import make_response, request
 from flask_restx import Namespace, Resource, fields, reqparse
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 import os
@@ -23,6 +23,7 @@ from app.services.auth_service import (
     verify_email_token as verify_email_token_svc,
     resend_verification as resend_verification_svc,
 )
+from app.routes.invitations.routes import validate_student_invite_token
 
 auth_ns = Namespace(
     "Institution authentication",
@@ -293,6 +294,33 @@ class VerifyEmailToken(Resource):
         token = _token_from_request(args.get("token"))
         result, status = verify_email_token_svc(token=token or "", lang=get_current_lang())
         return result, status
+
+
+@auth_ns.route("/invite/<path:token>")
+class ValidateStudentInvite(Resource):
+    @auth_ns.doc(
+        "validate_student_invite",
+        description="Validate signed student invite token and return CB-RBAC context.",
+    )
+    @jwt_required(optional=True)
+    def get(self, token: str):
+        invitation, payload, error = validate_student_invite_token(token)
+        if error:
+            return {"valid": False, "message": error}, 400
+        target_email = (payload.get("target_email") or "").strip().lower() or None
+        identity = get_jwt_identity()
+        next_action = "register"
+        if identity is not None and str(identity).isdigit():
+            next_action = "accept"
+        return {
+            "valid": True,
+            "invitation_id": invitation.id,
+            "organization_id": int(payload["organization_id"]),
+            "role": payload.get("role"),
+            "target_email": target_email,
+            "expires_at": invitation.expires_at.isoformat(),
+            "next_action": next_action,
+        }, 200
 
     @auth_ns.expect(verify_parser)
     @auth_ns.response(200, "Email verified or already verified")

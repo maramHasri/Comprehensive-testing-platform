@@ -4,7 +4,7 @@ Localization helpers: request language + delegated message resolution (cached in
 
 from flask import request
 
-from app.repositories.message_repository import get_message, get_message_format
+from app.localization.message_service import get_message, get_message_format
 
 
 def get_current_lang() -> str:

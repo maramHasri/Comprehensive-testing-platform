@@ -30,17 +30,9 @@ from app.routes.question_banks.service import (
     resolve_repeated_level_id_for_bank,
     _question_to_dict,
 )
-from app.repositories.bank_version_repository import get_versions_by_bank, sync_topic_counts_for_bank
 from app.repositories.question_repository import get_questions_by_version
-from app.services.question_bank.bank_access_service import (
-    BankAccessError,
-    get_user_accessible_version,
-    upgrade_bank,
-)
-from app.services.question_bank.bank_version_service import (
-    BankVersionServiceError,
-    create_new_version,
-)
+
+
 
 question_bank_ns = Namespace(
     " Question Banks",

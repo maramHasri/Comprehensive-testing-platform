@@ -8,7 +8,7 @@ class MembershipRole(str, Enum):
     STUDENT = "student"
     TEACHER = "teacher"
     ADMIN = "admin"
-    EXAMINER = "examiner"
+    INSTITUTION_ADMIN = "institution"
 
 
 class MembershipStatus(str, Enum):

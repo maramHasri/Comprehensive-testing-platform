@@ -8,7 +8,7 @@ from html import escape
 
 from flask import current_app
 
-from app.repositories.message_repository import get_message
+from app.localization.message_service import get_message
 from app.services.auth_service import ActivationLinkOutcome, process_activation_link_token
 from app.utils.localization import get_current_lang
 
