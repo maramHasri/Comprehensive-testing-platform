@@ -8,7 +8,7 @@ from flask_bcrypt import check_password_hash, generate_password_hash
 
 from flask import current_app
 from flask_jwt_extended import create_access_token
-
+from app.localization.message_service import get_message
 from app.extensions import db
 from app.models import Institution, User
 from app.repositories.auth_repository import create_session, delete_session_by_jti
@@ -188,7 +188,7 @@ def register_institution(
         return {"message": get_message("AUTH_EMAIL_EXISTS", lang)}, 400
     if get_user_by_email(email.strip()):
         return {"message": get_message("AUTH_EMAIL_EXISTS", lang)}, 400
-    user = create_user(name.strip(), email.strip(), password, "institution")
+    user = create_user(name.strip(), email.strip(), password)
     user.phone = phone.strip()
     user.country = country.strip()
     user.is_active = False
