@@ -56,6 +56,8 @@ class Organization(db.Model):
     kind = db.Column(db.String(30), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
     institution_id = db.Column(db.Integer, db.ForeignKey("institutions.id", ondelete="CASCADE"), unique=True, nullable=True)
+    admin_approval = db.Column(db.Boolean, nullable=False, default=False)
+    trust_level = db.Column(db.String(20), nullable=False, default="BASIC")
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     institution = db.relationship("Institution", back_populates="organization", foreign_keys=[institution_id])

@@ -16,6 +16,12 @@ class Config:
     EMAIL_VERIFY_TOKEN_EXPIRY_SECONDS = int(
         os.getenv("EMAIL_VERIFY_TOKEN_EXPIRY_SECONDS", str(30 * 60))
     )  # 30 minutes default
+    PASSWORD_RESET_OTP_EXPIRY_MINUTES = int(
+        os.getenv(
+            "PASSWORD_RESET_OTP_EXPIRY_MINUTES",
+            os.getenv("INSTITUTION_PASSWORD_RESET_OTP_EXPIRY_MINUTES", "10"),
+        )
+    )
     APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:5000")
     # Optional SPA URLs after email verification (defaults to APP_BASE_URL/dashboard)
     FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "").strip()

@@ -1,16 +1,19 @@
 
 
+from urllib.parse import unquote
+
 from app.models.organization import OrganizationKind
-from typing import Any
-from flask import request, current_app
-from flask_restx import Namespace, Resource, reqparse
+from flask import current_app
+from flask_restx import Namespace, Resource, inputs, reqparse
 from flask_bcrypt import generate_password_hash
+from flask_jwt_extended import jwt_required
 
 from app.extensions import db
 from app.models import User, Organization, Membership
 from app.models.membership import MembershipRole, MembershipStatus
 from app.services.email_template_service import send_activation_email
 from app.utils.email_verification_token import generate_email_verification_token
+from app.utils.rbac import roles_required
 
 independent_teachers_ns = Namespace(
     "Independent Teachers",
@@ -43,24 +46,34 @@ teacher_profile_parser.add_argument("specialization", type=str, required=False, 
 teacher_profile_parser.add_argument("years_of_experience", type=int, required=False, location=("json"))
 
 
-# =========================================================
-# TRUST LEVEL CALCULATION
-# =========================================================
+teacher_admin_approval_parser = reqparse.RequestParser()
+teacher_admin_approval_parser.add_argument(
+    "admin_approval", type=inputs.boolean, required=True, location=("json", "form"),
+)
 
-def evaluate_teacher_trust_level(user: User) -> str:
-    required_values: list[Any] = [
-        user.full_name,
-        user.email,
-        user.country,
-        user.phone,
-    ]
 
-    has_basic_fields = all(value not in (None, "") for value in required_values)
+def get_independent_teacher_organization(user: User) -> Organization | None:
+    return (
+        Organization.query.join(Membership)
+        .filter(
+            Membership.user_id == user.id,
+            Organization.kind == OrganizationKind.INDEPENDENT_TEACHER.value,
+        )
+        .first()
+    )
 
-    if has_basic_fields:
-        return "TRUSTED"
 
-    return "BASIC"
+def evaluate_teacher_trust_level(teacher_organization: Organization | None) -> str:
+    if teacher_organization is None:
+        return "BASIC"
+    if teacher_organization.kind != OrganizationKind.INDEPENDENT_TEACHER.value:
+        return "BASIC"
+    return teacher_organization.trust_level or "BASIC"
+
+
+def apply_independent_teacher_admin_review(organization: Organization, approved: bool) -> None:
+    organization.admin_approval = approved
+    organization.trust_level = "TRUSTED" if approved else "BASIC"
 
 
 # =========================================================
@@ -97,7 +110,7 @@ class IndependentTeacherRegister(Resource):
 
         # 2. Create Organization (teacher scope)
         organization = Organization(
-            name=f"{user.full_name} - Independent Teacher",
+            name=(user.full_name or "").strip(),
             kind=OrganizationKind.INDEPENDENT_TEACHER.value
         )
 
@@ -114,12 +127,9 @@ class IndependentTeacherRegister(Resource):
 
         db.session.add(membership)
 
-        # 4. Trust level
-        trust_level = evaluate_teacher_trust_level(user)
-
         db.session.commit()
 
-        # 5. Activation email
+        # 4. Activation email
         try:
             token = generate_email_verification_token(user.id)
             base_url = current_app.config.get("APP_BASE_URL", "").rstrip("/")
@@ -133,9 +143,40 @@ class IndependentTeacherRegister(Resource):
             "user_id": user.id,
             "organization_id": organization.id,
             "membership_id": membership.id,
-            "trust_level": trust_level,
+            "admin_approval": organization.admin_approval,
+            "trust_level": organization.trust_level,
             "message": "Independent teacher registered successfully. Please verify email."
         }, 201
+
+
+# =========================================================
+# SUPER ADMIN: TEACHER APPROVAL
+# =========================================================
+
+
+@independent_teachers_ns.route("/<string:teacher_email>/admin-approval")
+class IndependentTeacherAdminApproval(Resource):
+
+    @jwt_required()
+    @roles_required("super_admin", "super admin")
+    @independent_teachers_ns.expect(teacher_admin_approval_parser)
+    def put(self, teacher_email: str):
+        decoded_email = unquote(teacher_email).strip().lower()
+        user = User.query.filter_by(email=decoded_email).first()
+        if user is None:
+            return {"message": "Teacher not found."}, 404
+        organization = get_independent_teacher_organization(user)
+        if organization is None:
+            return {"message": "Independent teacher organization not found."}, 404
+        payload = teacher_admin_approval_parser.parse_args()
+        apply_independent_teacher_admin_review(organization, payload.get("admin_approval"))
+        db.session.commit()
+        return {
+            "email": user.email,
+            "organization_id": organization.id,
+            "admin_approval": organization.admin_approval,
+            "trust_level": organization.trust_level,
+        }, 200
 
 
 # =========================================================
@@ -158,11 +199,13 @@ class IndependentTeacherProfile(Resource):
             if value is not None:
                 setattr(user, field, value)
 
-        trust_level = evaluate_teacher_trust_level(user)
+        teacher_org = get_independent_teacher_organization(user)
+        trust_level = evaluate_teacher_trust_level(teacher_org)
         db.session.commit()
 
         return {
             "user_id": user.id,
+            "admin_approval": teacher_org.admin_approval if teacher_org else False,
             "trust_level": trust_level
         }, 200
 
@@ -182,7 +225,8 @@ class IndependentTeacherGet(Resource):
 
         membership = Membership.query.filter_by(user_id=user.id).first()
         organization_id = membership.organization_id if membership else None
-        trust_level = evaluate_teacher_trust_level(user)
+        teacher_org = get_independent_teacher_organization(user)
+        trust_level = evaluate_teacher_trust_level(teacher_org)
 
         return {
             "user_id": user.id,
@@ -191,5 +235,6 @@ class IndependentTeacherGet(Resource):
             "country": user.country,
             "phone": user.phone,
             "organization_id": organization_id,
+            "admin_approval": teacher_org.admin_approval if teacher_org else False,
             "trust_level": trust_level
         }, 200

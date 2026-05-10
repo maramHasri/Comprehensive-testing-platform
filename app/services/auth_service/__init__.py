@@ -1,5 +1,6 @@
 """Auth business logic: register, verify email, login, logout."""
 import logging
+import secrets
 import uuid
 from datetime import datetime, timedelta
 from enum import Enum
@@ -10,12 +11,15 @@ from flask import current_app
 from flask_jwt_extended import create_access_token
 from app.localization.message_service import get_message
 from app.extensions import db
-from app.models import Institution, User
+from app.models import AccountPasswordResetCode, Institution, User
 from app.repositories.auth_repository import create_session, delete_session_by_jti
 from app.repositories.user_repository import create_user, get_user_by_email, get_user_by_id
 from app.utils.iam_helpers import build_user_jwt_claims, ensure_institution_organization, ensure_membership, user_is_super_admin
 from app.models.membership import MembershipRole, MembershipStatus
-from app.services.email_template_service import send_activation_email
+from app.services.email_template_service import (
+    send_activation_email,
+    send_password_reset_otp_email,
+)
 from app.utils.email_verification_token import (
     decode_email_verification_token,
     generate_email_verification_token,
@@ -261,6 +265,86 @@ def resend_verification(email: str, lang: str | None = None) -> tuple[dict, int]
     if not _send_activation_for_user(user):
         return {"message": get_message("AUTH_EMAIL_SEND_FAILED", lang)}, 503
     return {"message": get_message("AUTH_RESEND_VERIFY_GENERIC", lang)}, 200
+
+
+def _normalize_password_reset_otp(raw: str | None) -> str:
+    return "".join(ch for ch in (raw or "") if ch.isdigit())
+
+
+def _password_reset_otp_expiry_minutes() -> int:
+    return max(1, int(current_app.config.get("PASSWORD_RESET_OTP_EXPIRY_MINUTES", 10)))
+
+
+def request_password_reset_otp(email: str, lang: str | None = None) -> tuple[dict, int]:
+    if lang is None:
+        lang = get_current_lang()
+    if not (email or "").strip():
+        return {"message": get_message("AUTH_EMAIL_REQUIRED", lang)}, 400
+    if not is_valid_email(email):
+        return {"message": get_message("AUTH_EMAIL_INVALID", lang)}, 400
+    normalized = email.strip().lower()
+    user = get_user_by_email(normalized)
+    if user is None:
+        _auth_log.info(
+            "[auth] password-reset OTP: no User row for email (generic response)"
+        )
+        return {"message": get_message("AUTH_FORGOT_PASSWORD_GENERIC", lang)}, 200
+    otp_plain = f"{secrets.randbelow(1_000_000):06d}"
+    otp_hash = _hash_password(otp_plain)
+    expires_at = datetime.utcnow() + timedelta(minutes=_password_reset_otp_expiry_minutes())
+    AccountPasswordResetCode.query.filter_by(email=normalized).delete()
+    db.session.add(
+        AccountPasswordResetCode(
+            email=normalized,
+            otp_hash=otp_hash,
+            expires_at=expires_at,
+        )
+    )
+    db.session.commit()
+    minutes = _password_reset_otp_expiry_minutes()
+    sent = send_password_reset_otp_email(user.email, otp_plain, minutes)
+    if not sent:
+        AccountPasswordResetCode.query.filter_by(email=normalized).delete()
+        db.session.commit()
+        return {"message": get_message("AUTH_EMAIL_SEND_FAILED", lang)}, 503
+    return {"message": get_message("AUTH_FORGOT_PASSWORD_GENERIC", lang)}, 200
+
+
+def reset_password_with_otp(
+    email: str,
+    otp: str,
+    new_password: str,
+    lang: str | None = None,
+) -> tuple[dict, int]:
+    if lang is None:
+        lang = get_current_lang()
+    if not (email or "").strip():
+        return {"message": get_message("AUTH_EMAIL_REQUIRED", lang)}, 400
+    if not is_valid_email(email):
+        return {"message": get_message("AUTH_EMAIL_INVALID", lang)}, 400
+    otp_digits = _normalize_password_reset_otp(otp)
+    if not otp_digits:
+        return {"message": get_message("AUTH_OTP_REQUIRED", lang)}, 400
+    if len(new_password or "") < 8:
+        return {"message": get_message("AUTH_PASSWORD_TOO_SHORT", lang)}, 400
+    normalized = email.strip().lower()
+    row = AccountPasswordResetCode.query.get(normalized)
+    if row is None or datetime.utcnow() > row.expires_at:
+        return {"message": get_message("AUTH_OTP_INVALID", lang)}, 400
+    if not check_password_hash(row.otp_hash, otp_digits):
+        return {"message": get_message("AUTH_OTP_INVALID", lang)}, 400
+    user = get_user_by_email(normalized)
+    if user is None:
+        db.session.delete(row)
+        db.session.commit()
+        return {"message": get_message("AUTH_OTP_INVALID", lang)}, 400
+    user.set_password(new_password)
+    institution = Institution.query.get(normalized)
+    if institution is not None:
+        institution.password = _hash_password(new_password)
+    db.session.delete(row)
+    db.session.commit()
+    return {"message": get_message("AUTH_RESET_SUCCESS", lang)}, 200
 
 
 def login_institution(email: str, password: str, lang: str | None = None) -> tuple[dict, int]:

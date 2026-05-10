@@ -186,6 +186,10 @@ MESSAGE_CATALOG: dict[str, dict[str, str]] = {
         "en": "Invalid or expired code.",
         "ar": "رمز غير صالح أو منتهٍ.",
     },
+    "AUTH_OTP_REQUIRED": {
+        "en": "Verification code is required.",
+        "ar": "رمز التحقق مطلوب.",
+    },
     "AUTH_OTP_VERIFIED": {
         "en": "Code verified. You can set a new password.",
         "ar": "تم التحقق من الرمز. يمكنك تعيين كلمة مرور جديدة.",

@@ -22,12 +22,17 @@ from app.services.auth_service import (
     get_institution_by_id as get_institution_by_id_svc,
     verify_email_token as verify_email_token_svc,
     resend_verification as resend_verification_svc,
+    request_password_reset_otp as request_password_reset_otp_svc,
+    reset_password_with_otp as reset_password_with_otp_svc,
 )
 from app.routes.invitations.routes import validate_student_invite_token
 
 auth_ns = Namespace(
     "Institution authentication",
-    description="Authentication APIs. Responses follow Accept-Language (en/ar).",
+    description=(
+        "Authentication APIs (institution register/login, unified password reset for all user kinds). "
+        "Responses follow Accept-Language (en/ar)."
+    ),
 )
 INSTITUTION_TYPES = (
     "university",
@@ -71,6 +76,38 @@ register_parser.add_argument("official_document", type=FileStorage, required=Fal
 login_parser = reqparse.RequestParser()
 login_parser.add_argument("email", type=str, required=True, location=("args", "json", "form"), help="Email (required)")
 login_parser.add_argument("password", type=str, required=True, location=("args", "json", "form"), help="Password (required)")
+
+password_reset_otp_parser = reqparse.RequestParser()
+password_reset_otp_parser.add_argument(
+    "email",
+    type=str,
+    required=True,
+    location=("args", "json", "form"),
+    help="Account login email",
+)
+
+password_reset_confirm_parser = reqparse.RequestParser()
+password_reset_confirm_parser.add_argument(
+    "email",
+    type=str,
+    required=True,
+    location=("args", "json", "form"),
+    help="Account login email",
+)
+password_reset_confirm_parser.add_argument(
+    "otp",
+    type=str,
+    required=True,
+    location=("args", "json", "form"),
+    help="Verification code from email",
+)
+password_reset_confirm_parser.add_argument(
+    "new_password",
+    type=str,
+    required=True,
+    location=("args", "json", "form"),
+    help="New password (min 8 characters)",
+)
 update_institution_parser = reqparse.RequestParser()
 update_institution_parser.add_argument("name", type=str, required=False, location=("args", "json", "form"))
 update_institution_parser.add_argument("type", type=str, required=False, location=("args", "json", "form"), choices=INSTITUTION_TYPES)
@@ -186,6 +223,49 @@ class Login(Resource):
         result, status = login_institution_svc(
             email=args.get("email"),
             password=args.get("password"),
+            lang=get_current_lang(),
+        )
+        return result, status
+
+
+@auth_ns.route("/password-reset/send-otp")
+class PasswordResetSendOtp(Resource):
+    @auth_ns.doc(
+        description=(
+            "Send a verification code by email for password reset (~10 minutes, configurable). "
+            "Works for any account with a users row (institution admins, teachers, students, super admins)."
+        ),
+    )
+    @auth_ns.expect(password_reset_otp_parser)
+    @auth_ns.response(200, "Generic response (avoid email enumeration)")
+    @auth_ns.response(400, "Validation error")
+    @auth_ns.response(503, "Email delivery failed")
+    def post(self):
+        args = password_reset_otp_parser.parse_args()
+        result, status = request_password_reset_otp_svc(
+            email=args.get("email"),
+            lang=get_current_lang(),
+        )
+        return result, status
+
+
+@auth_ns.route("/password-reset")
+class PasswordResetConfirm(Resource):
+    @auth_ns.doc(
+        description=(
+            "Set a new password using email, OTP from email, and new_password. "
+            "Updates the User password and, when applicable, the matching institution bcrypt password row."
+        ),
+    )
+    @auth_ns.expect(password_reset_confirm_parser)
+    @auth_ns.response(200, "Password updated")
+    @auth_ns.response(400, "Invalid input or code")
+    def post(self):
+        args = password_reset_confirm_parser.parse_args()
+        result, status = reset_password_with_otp_svc(
+            email=args.get("email"),
+            otp=args.get("otp"),
+            new_password=args.get("new_password"),
             lang=get_current_lang(),
         )
         return result, status

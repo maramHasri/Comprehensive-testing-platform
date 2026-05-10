@@ -8,6 +8,7 @@ from .quiz_attempt import QuizAttempt
 from .question_attempt import QuestionAttempt
 from .membership import Membership, MembershipRole, MembershipStatus
 from .organization import Institution, Organization
+from .account_password_reset_code import AccountPasswordResetCode
 from .country import Country, Region
 from .student_profile import StudentProfile
 from .invitation import Invitation
